@@ -10,6 +10,10 @@ export type BaseEntity = {
   createdAt: number;
   updatedAt: number;
   schemaVersion: number;
+  remoteId?: string;
+  dirty?: boolean;
+  lastSyncedAt?: number;
+  deleted?: boolean;
 };
 
 export type TranscriptRow = BaseEntity & {
@@ -50,6 +54,10 @@ export type PlaylistRow = {
   createdAt: number;
   updatedAt: number;
   schemaVersion: number;
+  remoteId?: string;
+  dirty?: boolean;
+  lastSyncedAt?: number;
+  deleted?: boolean;
 };
 
 export type StudyPlanRow = {
@@ -108,6 +116,10 @@ export type StudyPlanRow = {
   createdAt: number;
   updatedAt: number;
   schemaVersion: number;
+  remoteId?: string;
+  dirty?: boolean;
+  lastSyncedAt?: number;
+  deleted?: boolean;
 };
 
 export type NoteRow = BaseEntity & {
@@ -173,6 +185,46 @@ export type AnalyticsRow = BaseEntity & {
   payload: Record<string, unknown>;
 };
 
+export type TranscriptTranslationRow = {
+  id: string;
+  videoId: string;
+  targetLanguage: string;
+  chunks: Array<{
+    id: string;
+    text: string;
+    startTime: number;
+    endTime: number;
+    duration: number;
+    index: number;
+  }>;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type ChatHistoryRow = {
+  id: string;
+  videoId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  citations?: Array<{
+    id: string;
+    chunkId?: string;
+    startTime: number;
+    endTime?: number;
+    excerpt?: string;
+    videoId?: string;
+    videoTitle?: string;
+  }>;
+  timestamp: number;
+  createdAt: number;
+  updatedAt: number;
+  schemaVersion: number;
+  remoteId?: string;
+  dirty?: boolean;
+  lastSyncedAt?: number;
+  deleted?: boolean;
+};
+
 export class StudyflowDB extends Dexie {
   transcripts!: Table<TranscriptRow, string>;
   semanticChunks!: Table<SemanticChunkRow, string>;
@@ -184,6 +236,8 @@ export class StudyflowDB extends Dexie {
   flashcards!: Table<FlashcardRow, string>;
   quizzes!: Table<QuizRow, string>;
   analytics!: Table<AnalyticsRow, string>;
+  chatHistory!: Table<ChatHistoryRow, string>;
+  transcriptTranslations!: Table<TranscriptTranslationRow, string>;
 
   constructor() {
     super('yt-studyflow');
@@ -211,6 +265,42 @@ export class StudyflowDB extends Dexie {
       quizzes: 'id, videoId, mode, updatedAt',
       analytics: 'id, videoId, kind, createdAt',
     });
+
+    this.version(3).stores({
+      transcripts: 'id, videoId, updatedAt',
+      semanticChunks: 'id, videoId, playlistId, startTime, endTime, updatedAt',
+      embeddings: 'id, videoId, semanticChunkId, model, updatedAt',
+      playlists: 'id, updatedAt, remoteId, dirty',
+      studyPlans: 'id, playlistId, updatedAt, remoteId, dirty',
+      notes: 'id, videoId, playlistId, type, createdAt, updatedAt, isPinned, remoteId, dirty',
+      chapters: 'id, videoId, updatedAt',
+      flashcards: 'id, videoId, playlistId, nextReviewDate, difficulty, remoteId, dirty',
+      quizzes: 'id, videoId, mode, updatedAt, remoteId, dirty',
+      analytics: 'id, videoId, kind, createdAt',
+      chatHistory: 'id, videoId, role, createdAt, updatedAt, remoteId, dirty',
+    }).upgrade(async (tx) => {
+      for (const table of ['notes', 'flashcards', 'quizzes', 'playlists', 'studyPlans', 'chatHistory'] as const) {
+        const rows = await tx.table(table).toArray();
+        for (const row of rows) {
+          await tx.table(table).update(row.id, { dirty: true });
+        }
+      }
+    });
+
+    this.version(4).stores({
+      transcripts: 'id, videoId, updatedAt',
+      semanticChunks: 'id, videoId, playlistId, startTime, endTime, updatedAt',
+      embeddings: 'id, videoId, semanticChunkId, model, updatedAt',
+      playlists: 'id, updatedAt, remoteId, dirty',
+      studyPlans: 'id, playlistId, updatedAt, remoteId, dirty',
+      notes: 'id, videoId, playlistId, type, createdAt, updatedAt, isPinned, remoteId, dirty',
+      chapters: 'id, videoId, updatedAt',
+      flashcards: 'id, videoId, playlistId, nextReviewDate, difficulty, remoteId, dirty',
+      quizzes: 'id, videoId, mode, updatedAt, remoteId, dirty',
+      analytics: 'id, videoId, kind, createdAt',
+      chatHistory: 'id, videoId, role, createdAt, updatedAt, remoteId, dirty',
+      transcriptTranslations: 'id, videoId, targetLanguage, updatedAt',
+    });
   }
 }
 
@@ -237,4 +327,5 @@ export const DbIds = {
   analytics: (videoId: string, id: string) => `analytics|${videoId}|${id}`,
   playlist: (playlistId: string) => `playlist|${playlistId}`,
   studyPlan: (playlistId: string, topicSlug: string) => `study|${playlistId}|${topicSlug}`,
+  chatMessage: (videoId: string, messageId: string) => `chat|${videoId}|${messageId}`,
 };

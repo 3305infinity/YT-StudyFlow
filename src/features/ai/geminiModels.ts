@@ -19,7 +19,7 @@ export function buildTextModelFallbackChain(primary: string): string[] {
 }
 
 export function isRetryableGeminiStatus(status: number): boolean {
-  return status === 429 || status === 503;
+  return status >= 500 && status < 600;
 }
 
 export function isModelUnavailableStatus(status: number): boolean {

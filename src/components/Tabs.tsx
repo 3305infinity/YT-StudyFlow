@@ -25,7 +25,7 @@ export function Tabs<T extends string>({
     <div
       className={twMerge(
         clsx(
-          'flex gap-1 overflow-x-auto rounded-2xl bg-white/5 p-1 border border-white/8',
+          'flex gap-0.5 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900/50 p-0.5',
           '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
         ),
         className
@@ -46,20 +46,16 @@ export function Tabs<T extends string>({
             }}
             className={twMerge(
               clsx(
-                'relative shrink-0 rounded-xl px-2.5 py-2 text-xs font-medium transition-all',
-                'pointer-events-auto cursor-pointer select-none',
-                active
-                  ? 'bg-gradient-to-r from-indigo-500/35 to-violet-500/25 text-white shadow-sm ring-1 ring-indigo-400/25'
-                  : 'text-white/55 hover:text-white/85 hover:bg-white/5',
-                item.disabled && 'opacity-40 cursor-not-allowed pointer-events-none'
+                'relative shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40',
+                active ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300',
+                item.disabled && 'opacity-40 cursor-not-allowed'
               )
             )}
           >
-            <span>{item.label}</span>
+            {item.label}
             {item.badge && (
-              <span className="ml-1 rounded-md bg-accent/20 px-1 py-0.5 text-[10px] text-accent-muted">
-                {item.badge}
-              </span>
+              <span className="ml-1 rounded bg-neutral-700 px-1 py-0.5 text-[9px]">{item.badge}</span>
             )}
           </button>
         );

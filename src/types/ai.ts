@@ -29,6 +29,11 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   citations?: ChatCitation[];
+  structured?: import('@/types/chat').StructuredChatPayload;
+  sources?: import('@/types/chat').ChatSource[];
+  retrievalMetadata?: import('@/types/chat').RetrievalMetadata;
+  /** Sections revealed during simulated streaming */
+  visibleSections?: string[];
 }
 
 export interface ChatCitation {

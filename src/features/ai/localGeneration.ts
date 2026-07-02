@@ -1,31 +1,21 @@
 /**
- * Transcript-based generation when Gemini is unavailable (quota, bad key, offline).
+ * Limited transcript-based generation for genuine AI-unavailable states.
  */
 
 import type { Chapter, Flashcard, QuizQuestion, SemanticChunk } from '@/types/ai';
 import type { NoteType } from '@/types/notes';
+import { isGeminiQuotaError } from '@lib/aiErrors';
 import { formatTime } from '@lib/youtube';
 import { detectResponseIntent, bulletCountFromQuery } from '@/features/ai/responseIntent';
 import { DbIds, nowMs } from '@lib/db';
 import { defaultSm2State } from '@/features/revision/sm2';
 
 const LOCAL_FOOTER =
-  '\n\n---\n*Transcript fallback — Gemini quota may be exceeded. Wait a few minutes and ask again.*';
+  '\n\n---\n*AI generation is currently unavailable, so this is a limited transcript-based answer.*';
 
+/** @deprecated Use isGeminiQuotaError from @lib/aiErrors */
 export function isQuotaOrAuthError(err: unknown): boolean {
-  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  return (
-    msg.includes('429') ||
-    msg.includes('quota') ||
-    msg.includes('rate limit') ||
-    msg.includes('401') ||
-    msg.includes('403') ||
-    msg.includes('invalid api key') ||
-    msg.includes('api key not valid') ||
-    msg.includes('api key format') ||
-    msg.includes('must start with aiza') ||
-    msg.includes('gemini error')
-  );
+  return isGeminiQuotaError(err);
 }
 
 function pickSpreadChunks(chunks: SemanticChunk[], count: number): SemanticChunk[] {
@@ -39,9 +29,12 @@ function pickSpreadChunks(chunks: SemanticChunk[], count: number): SemanticChunk
 }
 
 function firstSentence(text: string, maxLen = 200): string {
-  const sent = text.split(/[.!?؟。]+/).map((s) => s.trim()).find((s) => s.length > 15);
+  const sent = text
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .find((s) => s.length > 15);
   const base = sent ?? text.trim();
-  return base.length > maxLen ? `${base.slice(0, maxLen).trim()}…` : base;
+  return base.length > maxLen ? `${base.slice(0, maxLen).trim()}...` : base;
 }
 
 export function localChatAnswer(
@@ -82,9 +75,9 @@ export function localChatAnswer(
     const lines = bullets.map(
       (c, i) => `- **Point ${i + 1}** (${formatTime(c.startTime)}): ${firstSentence(c.text, 120)}`
     );
-    const title = videoTitle ? `**${videoTitle}** — main points\n\n` : '**Main points**\n\n';
+    const title = videoTitle ? `**${videoTitle}** - main points\n\n` : '**Main points**\n\n';
     return {
-      content: `${title}${lines.join('\n')}\n\n*English summary from transcript segments.*${LOCAL_FOOTER}`,
+      content: `${title}${lines.join('\n')}${LOCAL_FOOTER}`,
       chunks: bullets,
     };
   }
@@ -95,7 +88,7 @@ export function localChatAnswer(
       return `**Q${i + 1}:** What does the instructor explain around ${formatTime(c.startTime)}?\n**A${i + 1}:** ${snippet}`;
     });
     return {
-      content: `### Interview-style (from transcript)\n\n${pairs.join('\n\n')}\n\n*Add API key for full AI + background knowledge.*${LOCAL_FOOTER}`,
+      content: `### Interview-style transcript notes\n\n${pairs.join('\n\n')}${LOCAL_FOOTER}`,
       chunks: relevant,
     };
   }
@@ -104,13 +97,8 @@ export function localChatAnswer(
     .map((c) => `**[${formatTime(c.startTime)}]** ${firstSentence(c.text, 280)}`)
     .join('\n\n');
 
-  const intro =
-    mode === 'deep'
-      ? '### From this lecture (add API key for full explanations + background):\n\n'
-      : '### From the transcript:\n\n';
-
   return {
-    content: `${intro}${body}${LOCAL_FOOTER}`,
+    content: `### Limited transcript notes\n\n${body}${LOCAL_FOOTER}`,
     chunks: relevant,
   };
 }
@@ -121,11 +109,11 @@ export function localNotes(
   videoTitle?: string
 ): { title: string; content: string } {
   const spread = pickSpreadChunks(chunks, type === 'detailed' ? 12 : 6);
-  const title = videoTitle ? `${type} notes — ${videoTitle}` : `${type} notes`;
+  const title = videoTitle ? `${type} notes - ${videoTitle}` : `${type} notes`;
 
   const sections = spread.map((c) => {
     const heading = `### ${formatTime(c.startTime)}`;
-    const body = c.text.length > 400 ? `${c.text.slice(0, 400).trim()}…` : c.text;
+    const body = c.text.length > 400 ? `${c.text.slice(0, 400).trim()}...` : c.text;
     return `${heading}\n${body}`;
   });
 
@@ -166,11 +154,10 @@ export function localChapters(chunks: SemanticChunk[], maxChapters = 8): Chapter
       title: `Section ${i + 1}`,
       startTime: group[0]!.startTime,
       endTime: group[group.length - 1]!.endTime,
-      summary:
-        'Open chapters with Gemini connected for an English summary. Transcript segment is non-English or raw.',
+      summary: 'AI chapter generation is currently unavailable for this segment.',
       keyPoints: group
         .slice(0, 3)
-        .map((g) => `At ${formatTime(g.startTime)}: concept covered in lecture`),
+        .map((g) => `At ${formatTime(g.startTime)}: transcript content is available.`),
     });
   }
 

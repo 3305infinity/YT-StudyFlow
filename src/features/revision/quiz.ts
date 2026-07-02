@@ -1,15 +1,30 @@
 import { GEMINI, VECTOR_SEARCH } from '@lib/constants';
 import { DbIds, ensureDbReady, getDb, nowMs } from '@lib/db';
 import type { QuizQuestion, SemanticChunk } from '@/types/ai';
-import { canUseGeminiApi } from '@lib/storage';
+import { canUseGeminiApi, getSettings } from '@lib/storage';
 import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildQuizPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localQuiz } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
+import { scheduleSync, syncVideoScope, canSync } from '@/lib/sync/engine';
+import { api } from '@lib/api/client';
 
 export async function clearQuizzesForVideo(videoId: string): Promise<void> {
   await ensureDbReady();
-  await getDb().quizzes.where('videoId').equals(videoId).delete();
+  const db = getDb();
+  const rows = await db.quizzes.where('videoId').equals(videoId).toArray();
+  if (await canSync()) {
+    for (const row of rows) {
+      if (row.remoteId) {
+        try {
+          await api.delete(`/api/quizzes/${row.remoteId}`);
+        } catch {
+          // offline — local clear only
+        }
+      }
+    }
+  }
+  await db.quizzes.where('videoId').equals(videoId).delete();
 }
 
 export async function generateQuizForVideo(params: {
@@ -49,10 +64,12 @@ export async function generateQuizForVideo(params: {
 
   try {
     const gemini = await createGeminiService();
+    const settings = await getSettings();
     const { system, user } = buildQuizPrompt({
       videoTitle: params.videoTitle,
       maxQuestions,
       context,
+      language: settings.responseLanguage,
     });
 
     const resp = await gemini.generateText({
@@ -129,14 +146,21 @@ async function saveQuizQuestions(
     })),
     createdAt: ts,
     updatedAt: ts,
-    schemaVersion: 1,
+    schemaVersion: 3,
+    dirty: true,
   });
 
+  scheduleSync();
   return questions;
 }
 
 export async function loadLatestQuiz(videoId: string): Promise<QuizQuestion[]> {
   await ensureDbReady();
+  try {
+    await syncVideoScope(videoId);
+  } catch {
+    // offline — serve Dexie cache
+  }
   const rows = await getDb().quizzes.where('videoId').equals(videoId).toArray();
   const latest = rows.sort((a, b) => b.updatedAt - a.updatedAt)[0];
   if (!latest) return [];

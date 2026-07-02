@@ -1,11 +1,115 @@
 /// <reference lib="webworker" />
 
 /**
- * Background service worker — page fetch, CC toggle, Gemini API proxy.
+ * Background service worker — page fetch, CC toggle, and periodic sync.
+ * AI requests go through the Express backend (never direct Gemini from the extension).
  */
+
+import { CLOUD_SYNC_DISABLED } from '../lib/config/sync.config';
+
+const SYNC_ALARM = 'studyflow-sync';
+const SYNC_INTERVAL_MINUTES = 30;
+
+async function triggerBackgroundSync(): Promise<void> {
+  try {
+    const { runSync } = await import('../lib/sync/engine');
+    await runSync();
+  } catch (err) {
+    console.warn('[YT StudyFlow] background sync failed', err);
+  }
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[YT StudyFlow] Extension installed');
+  // TODO: Re-enable periodic cloud sync when CLOUD_SYNC_DISABLED=false.
+  if (!CLOUD_SYNC_DISABLED) {
+    chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_INTERVAL_MINUTES });
+  }
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SYNC_ALARM && !CLOUD_SYNC_DISABLED) {
+    void triggerBackgroundSync();
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'YT_STUDYFLOW_AUTH_COMPLETE') {
+    console.log('[YT StudyFlow] Auth session saved');
+    // TODO: Re-enable when CLOUD_SYNC_DISABLED=false.
+    if (!CLOUD_SYNC_DISABLED) void triggerBackgroundSync();
+    return false;
+  }
+  if (message?.type === 'YT_STUDYFLOW_RUN_SYNC') {
+    if (!CLOUD_SYNC_DISABLED) void triggerBackgroundSync();
+    return false;
+  }
+  if (message?.type === 'YT_STUDYFLOW_OPEN_SIGN_IN') {
+    const extId = chrome.runtime.id?.trim() ?? '';
+    if (!/^[a-p]{32}$/.test(extId)) {
+      sendResponse({
+        ok: false,
+        error: 'Extension id unavailable. Reload the extension and try again.',
+      });
+      return true;
+    }
+
+    const authWebBase = String(message.authWebUrl ?? 'http://localhost:5174').replace(/\/$/, '');
+    const url = `${authWebBase}/sign-in?ext_id=${encodeURIComponent(extId)}&redirect=extension`;
+
+    chrome.windows.create(
+      { url, type: 'popup', width: 480, height: 720, focused: true },
+      (win) => {
+        if (chrome.runtime.lastError || !win?.id) {
+          chrome.tabs.create({ url }, (tab) => {
+            if (chrome.runtime.lastError || !tab?.id) {
+              sendResponse({
+                ok: false,
+                error: 'Could not open the sign-in window. Allow popups for this extension.',
+              });
+              return;
+            }
+            sendResponse({ ok: true });
+          });
+          return;
+        }
+        sendResponse({ ok: true });
+      }
+    );
+    return true;
+  }
+  if (message?.type === 'YT_STUDYFLOW_API_REQUEST') {
+    const url = String(message.url ?? '');
+    const method = String(message.method ?? 'GET');
+    const headers = (message.headers ?? {}) as Record<string, string>;
+    const body = message.body as string | undefined;
+
+    void fetch(url, { method, headers, body })
+      .then(async (resp) => {
+        sendResponse({
+          ok: resp.ok,
+          status: resp.status,
+          text: await resp.text(),
+        });
+      })
+      .catch((err) => {
+        sendResponse({
+          ok: false,
+          status: 0,
+          text: '',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    return true;
+  }
+  if (message?.type === 'YT_STUDYFLOW_PING_AUTH_WEB') {
+    const url = String(message.url ?? 'http://localhost:5174').replace(/\/$/, '');
+    void fetch(`${url}/`, { method: 'GET' })
+      .then((resp) => sendResponse({ ok: resp.ok }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  return false;
 });
 
 type PageFetchResult = {
@@ -13,13 +117,6 @@ type PageFetchResult = {
   status: number;
   text: string;
   contentType: string;
-  error?: string;
-};
-
-type GeminiFetchResult = {
-  ok: boolean;
-  status: number;
-  body: string;
   error?: string;
 };
 
@@ -80,62 +177,7 @@ function enableCaptionsInMainWorld(): boolean {
   return false;
 }
 
-async function geminiFetchInBackground(
-  url: string,
-  method: string,
-  body: string,
-  apiKey: string
-): Promise<GeminiFetchResult> {
-  const key = apiKey.trim();
-  if (!key) {
-    return { ok: false, status: 0, body: '', error: 'API key missing' };
-  }
-
-  // Native Gemini REST: key in query string (works for AIza and AQ keys).
-  const sep = url.includes('?') ? '&' : '?';
-  const fullUrl = `${url}${sep}key=${encodeURIComponent(key)}`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
-  try {
-    const resp = await fetch(fullUrl, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body || undefined,
-      signal: controller.signal,
-    });
-    const text = await resp.text();
-    return { ok: resp.ok, status: resp.status, body: text };
-  } catch (err) {
-    const message =
-      err instanceof Error && err.name === 'AbortError'
-        ? 'Gemini request timed out (30s)'
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    return {
-      ok: false,
-      status: 0,
-      body: '',
-      error: message,
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === 'YT_STUDYFLOW_GEMINI_FETCH') {
-    void geminiFetchInBackground(
-      String(message.url ?? ''),
-      String(message.method ?? 'POST'),
-      String(message.body ?? ''),
-      String(message.apiKey ?? '')
-    ).then(sendResponse);
-    return true;
-  }
-
   const tabId = sender.tab?.id;
   if (!tabId) return false;
 

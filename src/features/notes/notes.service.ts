@@ -2,11 +2,12 @@ import { GEMINI, VECTOR_SEARCH } from '@lib/constants';
 import { DbIds, ensureDbReady, getDb, nowMs } from '@lib/db';
 import type { Note, NoteType } from '@/types/notes';
 import type { SemanticChunk } from '@/types/ai';
-import { canUseGeminiApi } from '@lib/storage';
+import { canUseGeminiApi, getSettings } from '@lib/storage';
 import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildNotesPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localNotes } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
+import { scheduleSync, syncVideoScope } from '@/lib/sync/engine';
 
 function formatContext(chunks: SemanticChunk[], includeTimestamps: boolean): string {
   return chunks
@@ -51,12 +52,14 @@ export async function generateNote(params: {
   } else {
   try {
     const gemini = await createGeminiService();
+    const settings = await getSettings();
     const context = formatContext(contextChunks, includeTimestamps);
     const { system, user } = buildNotesPrompt({
       mode: params.type,
       videoTitle: params.videoTitle,
       context,
       includeTimestamps,
+      language: settings.responseLanguage,
     });
 
     const resp = await gemini.generateText({
@@ -102,16 +105,25 @@ export async function generateNote(params: {
   await ensureDbReady();
   await getDb().notes.put({
     ...note,
-    schemaVersion: 1,
+    schemaVersion: 3,
+    dirty: true,
   });
 
+  scheduleSync();
   return note;
 }
 
 export async function listNotes(videoId: string): Promise<Note[]> {
   await ensureDbReady();
+  try {
+    await syncVideoScope(videoId);
+  } catch {
+    // offline — serve Dexie cache
+  }
   const rows = await getDb().notes.where('videoId').equals(videoId).toArray();
-  return rows.map((r) => ({
+  return rows
+    .filter((r) => !r.deleted)
+    .map((r) => ({
     id: r.id,
     videoId: r.videoId,
     type: r.type,
@@ -128,5 +140,43 @@ export async function listNotes(videoId: string): Promise<Note[]> {
 
 export async function deleteNote(id: string): Promise<void> {
   await ensureDbReady();
-  await getDb().notes.delete(id);
+  const row = await getDb().notes.get(id);
+  if (!row) return;
+  if (row.remoteId) {
+    await getDb().notes.put({ ...row, deleted: true, dirty: true, updatedAt: nowMs() });
+  } else {
+    await getDb().notes.delete(id);
+  }
+  scheduleSync();
+}
+
+export async function updateNoteContent(id: string, content: string, title?: string): Promise<Note | null> {
+  await ensureDbReady();
+  const row = await getDb().notes.get(id);
+  if (!row || row.deleted) return null;
+
+  const updated: Note = {
+    id: row.id,
+    videoId: row.videoId,
+    type: row.type,
+    title: title ?? row.title,
+    content,
+    format: row.format,
+    tags: row.tags,
+    isPinned: row.isPinned,
+    createdAt: row.createdAt,
+    updatedAt: nowMs(),
+    timestampAnchors: row.timestampAnchors,
+  };
+
+  await getDb().notes.put({
+    ...updated,
+    schemaVersion: row.schemaVersion,
+    dirty: true,
+    remoteId: row.remoteId,
+    deleted: row.deleted,
+  });
+
+  scheduleSync();
+  return updated;
 }

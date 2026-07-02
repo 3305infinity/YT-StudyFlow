@@ -1,15 +1,24 @@
 {
   "manifest_version": 3,
   "name": "YT StudyFlow",
-  "version": "1.0.3",
+  "version": "1.3.0",
   "description": "AI-powered learning layer for YouTube",
 
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "alarms"],
 
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*",
+    "http://localhost:5174/*",
+    "http://127.0.0.1:5174/*",
+    "https://*.vercel.app/*",
+    "https://*.railway.app/*",
+    "https://*.up.railway.app/*",
+    "https://*.onrender.com/*",
+    "https://*.fly.dev/*",
+    "https://*.render.com/*"
   ],
 
   "background": {

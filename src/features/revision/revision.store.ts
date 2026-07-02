@@ -6,6 +6,7 @@ import {
   gradeFlashcard,
 } from './flashcards';
 import { generateQuizForVideo, loadLatestQuiz } from './quiz';
+import { useAnalyticsStore } from '@/store/analytics.store';
 
 interface RevisionState {
   flashcards: Flashcard[];
@@ -14,6 +15,7 @@ interface RevisionState {
   error: string | null;
   flipped: boolean;
   currentCardIndex: number;
+  quizIndex: number;
   quizAnswers: Record<string, number>;
   load: (videoId: string) => Promise<void>;
   generateFlashcards: (p: {
@@ -31,6 +33,10 @@ interface RevisionState {
   nextCard: () => void;
   prevCard: () => void;
   setQuizAnswer: (questionId: string, optionIndex: number) => void;
+  nextQuizQuestion: () => void;
+  prevQuizQuestion: () => void;
+  getQuizScore: () => { correct: number; total: number; answered: number };
+  getFlashcardStats: () => { dueToday: number; total: number; reviewed: number };
 }
 
 export const useRevisionStore = create<RevisionState>((set, get) => ({
@@ -40,6 +46,7 @@ export const useRevisionStore = create<RevisionState>((set, get) => ({
   error: null,
   flipped: false,
   currentCardIndex: 0,
+  quizIndex: 0,
   quizAnswers: {},
 
   load: async (videoId) => {
@@ -49,7 +56,7 @@ export const useRevisionStore = create<RevisionState>((set, get) => ({
         listFlashcards(videoId),
         loadLatestQuiz(videoId),
       ]);
-      set({ flashcards, quiz, loading: false, currentCardIndex: 0 });
+      set({ flashcards, quiz, loading: false, currentCardIndex: 0, quizIndex: 0 });
     } catch (e) {
       set({
         loading: false,
@@ -80,7 +87,7 @@ export const useRevisionStore = create<RevisionState>((set, get) => ({
         semanticChunks: chunks,
         videoTitle,
       });
-      set({ quiz, loading: false, quizAnswers: {} });
+      set({ quiz, loading: false, quizAnswers: {}, quizIndex: 0 });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : String(e) });
     }
@@ -91,6 +98,8 @@ export const useRevisionStore = create<RevisionState>((set, get) => ({
     const videoId = get().flashcards[0]?.videoId;
     if (videoId) {
       const flashcards = await listFlashcards(videoId);
+      const reviewed = flashcards.filter((f) => f.lastReviewed).length;
+      useAnalyticsStore.getState().setFlashcardsReviewed(reviewed);
       set({ flashcards, flipped: false });
     }
   },
@@ -106,6 +115,53 @@ export const useRevisionStore = create<RevisionState>((set, get) => ({
       currentCardIndex: Math.max(s.currentCardIndex - 1, 0),
       flipped: false,
     })),
-  setQuizAnswer: (questionId, optionIndex) =>
-    set((s) => ({ quizAnswers: { ...s.quizAnswers, [questionId]: optionIndex } })),
+
+  setQuizAnswer: (questionId, optionIndex) => {
+    set((s) => {
+      const quizAnswers = { ...s.quizAnswers, [questionId]: optionIndex };
+      const quiz = s.quiz;
+      let correct = 0;
+      let answered = 0;
+      for (const q of quiz) {
+        if (quizAnswers[q.id] != null) {
+          answered += 1;
+          if (quizAnswers[q.id] === q.correctAnswer) correct += 1;
+        }
+      }
+      const accuracy = answered ? correct / answered : null;
+      useAnalyticsStore.getState().setQuizAccuracy(accuracy);
+      return { quizAnswers };
+    });
+  },
+
+  nextQuizQuestion: () =>
+    set((s) => ({
+      quizIndex: Math.min(s.quizIndex + 1, Math.max(0, s.quiz.length - 1)),
+    })),
+
+  prevQuizQuestion: () =>
+    set((s) => ({
+      quizIndex: Math.max(s.quizIndex - 1, 0),
+    })),
+
+  getQuizScore: () => {
+    const { quiz, quizAnswers } = get();
+    let correct = 0;
+    let answered = 0;
+    for (const q of quiz) {
+      if (quizAnswers[q.id] != null) {
+        answered += 1;
+        if (quizAnswers[q.id] === q.correctAnswer) correct += 1;
+      }
+    }
+    return { correct, total: quiz.length, answered };
+  },
+
+  getFlashcardStats: () => {
+    const { flashcards } = get();
+    const now = Date.now();
+    const dueToday = flashcards.filter((f) => f.nextReviewDate <= now).length;
+    const reviewed = flashcards.filter((f) => f.lastReviewed).length;
+    return { dueToday, total: flashcards.length, reviewed };
+  },
 }));

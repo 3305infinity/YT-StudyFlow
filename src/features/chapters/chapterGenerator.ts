@@ -1,7 +1,7 @@
 import { GEMINI, VECTOR_SEARCH } from '@lib/constants';
 import { DbIds, ensureDbReady, getDb, nowMs } from '@lib/db';
 import type { Chapter, SemanticChunk } from '@/types/ai';
-import { canUseGeminiApi } from '@lib/storage';
+import { canUseGeminiApi, getSettings } from '@lib/storage';
 import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildChaptersPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localChapters } from '@/features/ai/localGeneration';
@@ -48,10 +48,12 @@ export async function generateChaptersForVideo(params: {
   } else {
   try {
     const gemini = await createGeminiService();
+    const settings = await getSettings();
     const { system, user } = buildChaptersPrompt({
       videoTitle: params.videoTitle,
       maxChapters,
       context,
+      language: settings.responseLanguage,
     });
 
     const resp = await gemini.generateText({

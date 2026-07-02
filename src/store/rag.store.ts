@@ -6,8 +6,9 @@ import {
   indexMetaFromPage,
 } from '@/features/ai/ragPipeline.service';
 import { usePlaylistStore } from '@/store/playlist.store';
-import { isQuotaOrAuthError } from '@/features/ai/localGeneration';
-import { isValidGeminiApiKey } from '@lib/storage';
+import { friendlyAiError, isGeminiQuotaError } from '@lib/aiErrors';
+import { AUTH_DISABLED } from '@lib/config/auth.config';
+import { checkBackendHealth } from '@lib/api/client';
 
 interface RagState {
   videoId: string | null;
@@ -36,12 +37,30 @@ export const useRagStore = create<RagState>((set, get) => ({
 
     set({ videoId, status: 'building', error: null, stage: 'Starting…', keywordOnly: false });
     try {
-      const { getGeminiApiKey } = await import('@lib/storage');
-      const key = (await getGeminiApiKey())?.trim() ?? '';
-
       const meta = indexMetaFromPage();
+      const backendOnline = await checkBackendHealth();
 
-      if (!isValidGeminiApiKey(key)) {
+      // TODO: Re-enable auth check when AUTH_DISABLED is false.
+      if (!AUTH_DISABLED) {
+        const { isAuthenticated } = await import('@lib/api/auth');
+        const authed = await isAuthenticated();
+        if (!authed) {
+          const chunks = await buildKeywordOnlyIndex(videoId, enhancedChunks, (stage) =>
+            set({ stage }), meta
+          );
+          void usePlaylistStore.getState().registerCurrentVideo(videoId, meta.videoTitle);
+          void usePlaylistStore.getState().refreshPlaylistChunks();
+          set({
+            chunks,
+            status: 'ready',
+            stage: 'Transcript indexed — sign in for AI features',
+            keywordOnly: true,
+          });
+          return;
+        }
+      }
+
+      if (!backendOnline) {
         const chunks = await buildKeywordOnlyIndex(videoId, enhancedChunks, (stage) =>
           set({ stage }), meta
         );
@@ -50,7 +69,7 @@ export const useRagStore = create<RagState>((set, get) => ({
         set({
           chunks,
           status: 'ready',
-          stage: 'Local mode — add a Google AI Studio key in Settings for AI answers',
+          stage: 'Backend offline — keyword search only',
           keywordOnly: true,
         });
         return;
@@ -59,21 +78,16 @@ export const useRagStore = create<RagState>((set, get) => ({
       const chunks = await buildSemanticIndex(videoId, enhancedChunks, (stage) =>
         set({ stage }), meta
       );
-      const keywordOnly = !chunks.some((c) => c.embedding?.length);
       void usePlaylistStore.getState().registerCurrentVideo(videoId, meta.videoTitle);
       void usePlaylistStore.getState().refreshPlaylistChunks();
       set({
         chunks,
         status: 'ready',
-        stage: keywordOnly
-          ? isValidGeminiApiKey(key)
-            ? 'Ready — keyword + vector search'
-            : 'Local mode — add API key in Settings'
-          : 'Vector RAG ready',
-        keywordOnly,
+        stage: 'Vector RAG ready (Pinecone)',
+        keywordOnly: false,
       });
     } catch (e) {
-      if (isQuotaOrAuthError(e)) {
+      if (isGeminiQuotaError(e)) {
         try {
           const chunks = await buildKeywordOnlyIndex(videoId, enhancedChunks, (stage) =>
             set({ stage }), indexMetaFromPage()
@@ -81,7 +95,7 @@ export const useRagStore = create<RagState>((set, get) => ({
           set({
             chunks,
             status: 'ready',
-            stage: 'Local mode — Gemini quota exceeded',
+            stage: 'Local mode — Gemini quota or rate limit exceeded',
             keywordOnly: true,
             error: null,
           });
@@ -92,7 +106,7 @@ export const useRagStore = create<RagState>((set, get) => ({
       }
       set({
         status: 'error',
-        error: e instanceof Error ? e.message : String(e),
+        error: friendlyAiError(e),
         stage: '',
       });
     }

@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+   directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id
+  email     String?
+  name      String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  videos     Video[]
+  playlists  Playlist[]
+  chats      Chat[]
+  notes      Note[]
+  flashcards Flashcard[]
+  quizzes    Quiz[]
+  transcripts Transcript[]
+  usageLogs  UsageLog[]
+  studySessions StudySession[]
+}
+
+model Video {
+  id          String   @id @default(cuid())
+  userId      String
+  youtubeId   String
+  title       String?
+  channel     String?
+  durationSec Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transcripts Transcript[]
+  chats       Chat[]
+  notes       Note[]
+  flashcards  Flashcard[]
+  quizzes     Quiz[]
+
+  @@unique([userId, youtubeId])
+  @@index([userId])
+}
+
+model Playlist {
+  id          String   @id @default(cuid())
+  userId      String
+  youtubeId   String
+  title       String?
+  videoIds    String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, youtubeId])
+  @@index([userId])
+}
+
+model Transcript {
+  id        String   @id @default(cuid())
+  userId    String
+  videoId   String
+  chunks    Json
+  language  String?
+  source    String?
+  indexedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@index([userId])
+}
+
+model Chat {
+  id        String   @id @default(cuid())
+  userId    String
+  videoId   String?
+  role      String
+  content   String
+  citations Json?
+  mode      String?
+  model     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video? @relation(fields: [videoId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, updatedAt])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  videoId   String
+  type      String
+  title     String
+  content   String
+  tags      String[] @default([])
+  anchors   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, videoId])
+}
+
+model Flashcard {
+  id           String   @id @default(cuid())
+  userId       String
+  videoId      String
+  front        String
+  back         String
+  tags         String[] @default([])
+  sm2          Json?
+  nextReviewAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, videoId])
+}
+
+model Quiz {
+  id        String   @id @default(cuid())
+  userId    String
+  videoId   String
+  mode      String
+  questions Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, videoId])
+}
+
+model UsageLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model StudySession {
+  id           String   @id @default(cuid())
+  userId       String
+  playlistId   String?
+  topic        String
+  level        String?
+  payload      Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([userId, playlistId])
+}

@@ -1,25 +1,68 @@
-import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Bot, MessageSquare, Send, Sparkles, Trash2, Clock, User } from 'lucide-react';
+import { useEffect, useRef, useState, memo } from 'react';
+import { Send, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import { useChat } from '@/hooks/useChat';
 import { useSettingsStore } from '@/store/settings.store';
 import { usePlaylistStore } from '@/store/playlist.store';
-import { formatTime } from '@lib/youtube';
-import { Loader } from '@/components/Loader';
 import { FeatureGate } from '@/components/FeatureGate';
-import { MarkdownView } from '@/components/MarkdownView';
+import { WorkspaceShell } from '@/components/WorkspaceShell';
+import { StructuredAnswer } from '@/components/StructuredAnswer';
+import { LanguageBadge } from '@/components/LanguageSelector';
+import { PipelineProgress } from '@/components/PipelineProgress';
+import { ErrorBanner } from '@/components/ErrorBanner';
 import type { ChatMode } from '@/features/chat/chat.service';
-import { useAiReadiness, useHasApiKey } from '@/hooks/useAiReadiness';
-import { hasBuiltInGeminiKey } from '@lib/env';
-
+import { useAiReadiness } from '@/hooks/useAiReadiness';
+import type { ChatMessage } from '@/types/ai';
 const SUGGESTIONS = [
-  'Which companies or topics are mentioned in this video?',
-  'Summarize the main points in 5 bullets',
-  'What opportunities or roles are discussed?',
+  'Summarize the main ideas in 3 points',
+  'Explain the hardest concept simply',
+  'What should I review before an exam?',
 ];
+
+const MessageBubble = memo(function MessageBubble({
+  msg,
+  loading,
+  onJump,
+}: {
+  msg: ChatMessage;
+  loading: boolean;
+  onJump: (seconds: number, videoId?: string) => void;
+}) {
+  const isUser = msg.role === 'user';
+
+  return (
+    <div className={twMerge(clsx('flex', isUser ? 'justify-end' : 'justify-start'))}>
+      <div
+        className={twMerge(
+          clsx(
+            'max-w-[92%] rounded-xl px-3.5 py-2.5',
+            isUser
+              ? 'bg-indigo-600/90 text-white'
+              : 'border border-neutral-800 bg-neutral-900/80 text-neutral-100'
+          )
+        )}
+      >
+        {isUser ? (
+          <p className="text-sm leading-relaxed">{msg.content}</p>
+        ) : msg.structured ? (
+          <StructuredAnswer
+            structured={msg.structured}
+            citations={msg.citations}
+            sources={msg.sources}
+            visibleSections={msg.visibleSections ? new Set(msg.visibleSections) : undefined}
+            onJump={onJump}
+          />
+        ) : loading && !msg.content ? (
+          <p className="text-sm text-neutral-500 animate-pulse">Generating answer…</p>
+        ) : (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-200">{msg.content}</p>
+        )}
+      </div>
+    </div>
+  );
+});
 
 export function ChatPanel({
   onJumpToTime,
@@ -28,11 +71,9 @@ export function ChatPanel({
 }) {
   const [input, setInput] = useState('');
   const defaultMode = useSettingsStore((s) => s.chatMode);
-  const [mode, setMode] = useState<ChatMode>(defaultMode);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<ChatMode>(defaultMode);  const bottomRef = useRef<HTMLDivElement>(null);
   const { messages, loading, error, send, clear } = useChat();
   const readiness = useAiReadiness();
-  const hasApiKey = useHasApiKey();
   const playlist = usePlaylistStore((s) => s.playlist);
   const scope = usePlaylistStore((s) => s.scope);
   const setScope = usePlaylistStore((s) => s.setScope);
@@ -53,7 +94,7 @@ export function ChatPanel({
     try {
       await send(q, mode);
     } catch {
-      // error in store
+      // error surfaced via store
     }
   };
 
@@ -62,233 +103,137 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-white/10 bg-gradient-to-r from-indigo-500/10 via-transparent to-violet-500/10 px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/40 to-violet-600/30 shadow-glow ring-1 ring-white/10">
-              <MessageSquare className="h-4 w-4 text-indigo-100" />
-            </div>
-            <div>
-              <span className="text-sm font-semibold text-white">AI Chat</span>
-              <p className="text-[10px] text-white/45">
-                Transcript + world knowledge · cited timestamps
-                {readiness.state === 'ready' && readiness.keywordOnly ? ' · keyword search' : ''}
-              </p>
-            </div>
+    <WorkspaceShell
+      title="AI Chat"
+      subtitle="Hybrid tutor · lecture + general knowledge · structured answers with sources"
+      actions={
+        <>
+          <LanguageBadge />
+          <div className="flex rounded-lg border border-neutral-800 p-0.5" role="group" aria-label="Chat mode">            {(['concise', 'deep', 'interview'] as ChatMode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                className={twMerge(
+                  clsx(
+                    'rounded-md px-2 py-1 text-[10px] font-medium capitalize',
+                    mode === m ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'
+                  )
+                )}
+              >
+                {m}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 backdrop-blur-sm">
-              {(['concise', 'deep', 'interview'] as ChatMode[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className={twMerge(
-                    clsx(
-                      'rounded-lg px-2.5 py-1 text-[10px] font-medium capitalize transition-all',
-                      mode === m
-                        ? 'bg-gradient-to-r from-indigo-500/50 to-violet-500/40 text-white shadow-sm'
-                        : 'text-white/45 hover:text-white/80'
-                    )
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
+          <button
+            type="button"
+            onClick={clear}
+            aria-label="Clear chat"
+            className="rounded-md border border-neutral-800 p-1.5 text-neutral-500 hover:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </>
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        {playlist && (
+          <div className="mx-4 mt-3 flex gap-1 rounded-lg border border-neutral-800 p-0.5">
+            {(['video', 'playlist'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setScope(s);
+                  if (s === 'playlist') void usePlaylistStore.getState().refreshPlaylistChunks();
+                }}
+                className={twMerge(
+                  clsx(
+                    'flex-1 rounded-md py-1.5 text-[10px] font-medium',
+                    scope === s ? 'bg-neutral-800 text-white' : 'text-neutral-500'
+                  )
+                )}
+              >
+                {s === 'video' ? 'This video' : `Playlist (${indexedVideoCount})`}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <PipelineProgress />
+
+        {error && !loading && (
+          <ErrorBanner
+            message={error}
+            actions={[
+              {
+                label: 'Retry last question',
+                onClick: () => {
+                  const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+                  if (lastUser) void handleSend(lastUser.content);
+                },
+              },
+            ]}
+          />
+        )}
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-5">
+              <p className="text-sm font-medium text-white">Ask about this lecture</p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Answers are split into summary, explanation, takeaways, and cited sources.
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void handleSend(s)}
+                    className="rounded-lg border border-neutral-800 px-3 py-2 text-left text-xs text-neutral-300 hover:border-neutral-700 hover:bg-neutral-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+
+          {messages.map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              loading={loading && msg.role === 'assistant' && !msg.content && !msg.structured}
+              onJump={onJumpToTime}
+            />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="shrink-0 border-t border-neutral-800 p-3">
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), void handleSend())}
+              placeholder="Ask a question…"
+              disabled={loading}
+              aria-label="Chat message"
+              className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 disabled:opacity-50"
+            />
             <button
               type="button"
-              onClick={clear}
-              className="rounded-xl border border-white/10 p-2 text-white/40 hover:bg-white/8 hover:text-white"
-              title="Clear chat"
+              onClick={() => void handleSend()}
+              disabled={loading || !input.trim()}
+              aria-label="Send message"
+              className="rounded-lg bg-indigo-600 px-3 py-2.5 text-white hover:bg-indigo-500 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Send className="h-4 w-4" />
             </button>
           </div>
         </div>
       </div>
-
-      {!hasApiKey && (
-        <div className="mx-4 mt-3 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 to-orange-500/10 px-3 py-2.5 text-[11px] leading-5 text-amber-50">
-          Set <code className="text-amber-100">VITE_GEMINI_API_KEY</code> in{' '}
-          <code className="text-amber-100">.env</code> and run <code className="text-amber-100">npm run build</code>.
-          Without a key, replies use transcript excerpts only.
-        </div>
-      )}
-      {hasBuiltInGeminiKey() && (
-        <div className="mx-4 mt-2 text-[10px] text-white/35">Using API key from build (.env)</div>
-      )}
-
-      {playlist && (
-        <div className="mx-4 mt-3 flex gap-1 rounded-xl border border-white/10 bg-black/20 p-0.5">
-          <button
-            type="button"
-            onClick={() => setScope('video')}
-            className={twMerge(
-              clsx(
-                'flex-1 rounded-lg py-1.5 text-[10px] font-medium',
-                scope === 'video' ? 'bg-indigo-500/35 text-white' : 'text-white/45'
-              )
-            )}
-          >
-            This video
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setScope('playlist');
-              void usePlaylistStore.getState().refreshPlaylistChunks();
-            }}
-            className={twMerge(
-              clsx(
-                'flex-1 rounded-lg py-1.5 text-[10px] font-medium',
-                scope === 'playlist' ? 'bg-violet-500/35 text-white' : 'text-white/45'
-              )
-            )}
-          >
-            Whole playlist ({indexedVideoCount})
-          </button>
-        </div>
-      )}
-
-      {hasApiKey && (
-        <div className="mx-4 mt-2 rounded-xl border border-indigo-400/25 bg-indigo-500/10 px-3 py-2 text-[11px] leading-5 text-indigo-100/90">
-          Hybrid RAG: vector embeddings + keyword search. Answers use lecture transcript + general knowledge.
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-transparent p-6 text-center shadow-inner">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/20 ring-1 ring-indigo-400/30">
-              <Sparkles className="h-6 w-6 text-indigo-200" />
-            </div>
-            <p className="mt-3 text-base font-semibold text-white">Ask about this lecture</p>
-            <p className="mt-1.5 text-xs leading-5 text-white/50">
-              Names like companies, people, and roles are searched across the full transcript.
-            </p>
-            <div className="mt-5 flex flex-col gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void handleSend(s)}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left text-xs leading-5 text-white/75 transition-colors hover:border-indigo-400/35 hover:bg-indigo-500/12 hover:text-white"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={twMerge(clsx('flex gap-2.5', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'))}
-          >
-            <div
-              className={twMerge(
-                clsx(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1',
-                  msg.role === 'user'
-                    ? 'bg-indigo-500/35 ring-indigo-400/25'
-                    : 'bg-white/[0.06] ring-white/10'
-                )
-              )}
-            >
-              {msg.role === 'user' ? (
-                <User className="h-4 w-4 text-indigo-100" />
-              ) : (
-                <Bot className="h-4 w-4 text-indigo-200" />
-              )}
-            </div>
-
-            <div
-              className={twMerge(
-                clsx(
-                  'max-w-[90%] rounded-2xl px-4 py-3',
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-br from-indigo-600/35 to-violet-600/25 text-[15px] leading-relaxed text-white ring-1 ring-indigo-400/20'
-                    : 'border border-white/10 bg-surface-raised/80 text-white/92 shadow-sm backdrop-blur-sm'
-                )
-              )}
-            >
-              {msg.role === 'assistant' && msg.content ? (
-                <MarkdownView content={msg.content} variant="notes" />
-              ) : msg.role === 'user' ? (
-                <p className="text-[15px] leading-relaxed">{msg.content}</p>
-              ) : loading ? (
-                <Loader label="Searching transcript…" />
-              ) : null}
-
-              {msg.citations && msg.citations.length > 0 && (
-                <div className="mt-3 border-t border-white/10 pt-3">
-                  <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-white/40">
-                    Jump to moment
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {msg.citations.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                      onClick={() => onJumpToTime(c.startTime, c.videoId)}
-                      className="group flex items-start gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-2 text-left hover:border-indigo-400/30 hover:bg-indigo-500/10"
-                    >
-                      <span className="mt-0.5 inline-flex shrink-0 flex-col items-start gap-0.5 rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-medium text-indigo-100">
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatTime(c.startTime)}
-                        </span>
-                        {c.videoTitle && (
-                          <span className="max-w-[120px] truncate text-[9px] text-indigo-200/80">
-                            {c.videoTitle}
-                          </span>
-                        )}
-                      </span>
-                        <span className="line-clamp-2 text-[11px] leading-4 text-white/55 group-hover:text-white/75">
-                          {c.excerpt}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      {error && (
-        <p className="mx-4 mb-1 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-          {error}
-        </p>
-      )}
-
-      <div className="border-t border-white/10 bg-surface-raised/50 p-3 backdrop-blur-md">
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), void handleSend())}
-            placeholder="e.g. Did they mention BlackRock?"
-            disabled={loading}
-            className="flex-1 rounded-xl border border-white/12 bg-black/25 px-3.5 py-2.5 text-sm text-white shadow-inner placeholder:text-white/30 focus:border-indigo-400/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
-          />
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={loading || !input.trim()}
-            className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-95 disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </div>
+    </WorkspaceShell>
   );
 }

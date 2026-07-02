@@ -10,7 +10,7 @@ import { retrieveRelevantChunksWithScores } from '@/features/ai/ragPipeline.serv
 import { VECTOR_SEARCH, GEMINI } from '@lib/constants';
 import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildStudyPathPrompt, parseJson } from '@/features/ai/promptBuilder';
-import { canUseGeminiApi } from '@lib/storage';
+import { canUseGeminiApi, getSettings } from '@lib/storage';
 import { buildEducationalPrompt } from '@/features/ai/promptBuilder';
 import { detectResponseIntent } from '@/features/ai/responseIntent';
 import type { ScoredChunk } from '@/features/ai/transcriptRetrieval';
@@ -21,6 +21,7 @@ import {
 } from './studyPathLocal';
 import { computeMasteryBreakdown } from './mastery.service';
 import type { StudyPlanRow } from '@lib/db';
+import { scheduleSync } from '@/lib/sync/engine';
 
 function slug(topic: string): string {
   return topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
@@ -84,6 +85,7 @@ function planToRow(plan: StudyPlan): StudyPlanRow {
   return {
     ...plan,
     schemaVersion: 3,
+    dirty: true,
   };
 }
 
@@ -180,6 +182,7 @@ export async function runStudyAgent(params: {
   if (await canUseGeminiApi()) {
     try {
       const gemini = await createGeminiService();
+      const settings = await getSettings();
       const evidence = buildRetrievalEvidence(scored);
       const resp = await gemini.generateText({
         model: GEMINI.CHAT_MODEL,
@@ -188,6 +191,7 @@ export async function runStudyAgent(params: {
           level: params.level,
           videoTitle: params.videoTitle,
           evidence: formatEvidenceForPrompt(evidence),
+          language: settings.responseLanguage,
         }),
         config: { temperature: 0.35, maxOutputTokens: 2800 },
       });
@@ -221,11 +225,18 @@ export async function runStudyAgent(params: {
   draft.mastery = await computeMasteryBreakdown(params.playlistId, draft);
   await ensureDbReady();
   await getDb().studyPlans.put(planToRow(draft));
+  scheduleSync();
   return draft;
 }
 
 export async function loadLatestStudyPlan(playlistId: string): Promise<StudyPlan | null> {
   await ensureDbReady();
+  try {
+    const { pullStudySessions } = await import('@/lib/sync/studySessions.sync');
+    await pullStudySessions(playlistId);
+  } catch {
+    // offline — serve Dexie cache
+  }
   const rows = await getDb().studyPlans.where('playlistId').equals(playlistId).toArray();
   const valid = rows.filter((r) => r.schemaVersion >= 3 && r.segments?.length);
   if (!valid.length) return null;
@@ -254,6 +265,7 @@ export async function markSegmentWatched(planId: string, segmentId: string): Pro
   });
   draft.mastery = await computeMasteryBreakdown(row.playlistId, draft);
   await getDb().studyPlans.put(planToRow(draft));
+  scheduleSync();
   return draft;
 }
 
@@ -265,6 +277,7 @@ export async function refreshPlanMastery(planId: string): Promise<StudyPlan | nu
   plan.mastery = await computeMasteryBreakdown(row.playlistId, plan);
   plan.updatedAt = nowMs();
   await getDb().studyPlans.put(planToRow(plan));
+  scheduleSync();
   return plan;
 }
 
@@ -291,6 +304,7 @@ export async function askStudyTutor(params: {
   }
 
   const gemini = await createGeminiService();
+  const settings = await getSettings();
   const intent = detectResponseIntent(params.question, 'deep');
   const { system, user } = buildEducationalPrompt({
     userQuery: `[Study topic: ${params.plan.topic}, level: ${params.plan.level}] ${params.question}`,
@@ -299,6 +313,7 @@ export async function askStudyTutor(params: {
     conversationSummary: params.conversationSummary,
     responseIntent: intent,
     promptOptions: { mode: 'student', includeTimestamps: true, maxContextChars: 12000 },
+    language: settings.responseLanguage,
   });
 
   const resp = await gemini.generateText({

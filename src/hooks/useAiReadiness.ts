@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { useTranscriptStore } from '@/features/transcript/transcript.store';
 import { useRagStore } from '@/store/rag.store';
-import { useSettingsStore } from '@/store/settings.store';
-import { isValidGeminiApiKey } from '@lib/storage';
+import { useAuthStore } from '@/store/auth.store';
+import { AUTH_DISABLED } from '@lib/config/auth.config';
+
 export type AiReadiness =
-  | { state: 'no-key'; message: string }
+  | { state: 'no-auth'; message: string }
   | { state: 'loading-transcript'; message: string }
   | { state: 'no-transcript'; message: string }
   | { state: 'building-index'; message: string; stage?: string }
@@ -12,8 +13,8 @@ export type AiReadiness =
   | { state: 'ready'; chunkCount: number; keywordOnly?: boolean };
 
 export function useAiReadiness(): AiReadiness {
-  const apiKey = useSettingsStore((s) => s.geminiApiKey);
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const user = useAuthStore((s) => s.user);
+  const authLoaded = useAuthStore((s) => s.loaded);
   const transcriptStatus = useTranscriptStore((s) => s.status);
   const transcriptLoading = useTranscriptStore((s) => s.loading);
   const enhancedCount = useTranscriptStore((s) => s.enhancedChunks.length);
@@ -24,7 +25,17 @@ export function useAiReadiness(): AiReadiness {
   const keywordOnly = useRagStore((s) => s.keywordOnly);
 
   return useMemo(() => {
-    const hasValidKey = isValidGeminiApiKey(apiKey ?? '') || isValidGeminiApiKey(envKey ?? '');
+    if (!authLoaded) {
+      return { state: 'loading-transcript', message: 'Loading…' };
+    }
+
+    // TODO: Re-enable auth gate when AUTH_DISABLED is false.
+    if (!AUTH_DISABLED && !user) {
+      return {
+        state: 'no-auth',
+        message: 'Sign in to unlock AI chat, notes, quizzes, and vector search.',
+      };
+    }
 
     if (transcriptLoading || transcriptStatus === 'loading' || transcriptStatus === 'idle') {
       return { state: 'loading-transcript', message: 'Loading transcript…' };
@@ -60,18 +71,10 @@ export function useAiReadiness(): AiReadiness {
       return { state: 'ready', chunkCount, keywordOnly };
     }
 
-    if (!hasValidKey) {
-      return {
-        state: 'no-key',
-        message:
-          'Set VITE_GEMINI_API_KEY in .env and rebuild, or wait for local transcript index.',
-      };
-    }
-
     return { state: 'building-index', message: 'Preparing index…', stage: ragStage };
   }, [
-    apiKey,
-    envKey,
+    user,
+    authLoaded,
     transcriptStatus,
     transcriptLoading,
     enhancedCount,
@@ -84,7 +87,12 @@ export function useAiReadiness(): AiReadiness {
 }
 
 export function useHasApiKey(): boolean {
-  const apiKey = useSettingsStore((s) => s.geminiApiKey);
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-  return isValidGeminiApiKey(apiKey ?? '') || isValidGeminiApiKey(envKey ?? '');
+  const user = useAuthStore((s) => s.user);
+  return !!user;
+}
+
+export async function useCanUseAi(): Promise<boolean> {
+  if (AUTH_DISABLED) return true;
+  const { isAuthenticated } = await import('@lib/api/auth');
+  return isAuthenticated();
 }

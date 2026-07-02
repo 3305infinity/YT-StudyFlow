@@ -1,70 +1,122 @@
 # YT StudyFlow
 
-Chrome extension that turns YouTube lectures into an **AI study workspace** with transcript RAG, cited answers, notes, quizzes, flashcards (SM-2), and learning analytics.
-
-> **Project path:** `second_aprt/yt-studyflow` — load unpacked from `dist/` after `npm run build`.
+Chrome extension that turns YouTube lectures into an **AI study workspace** with Pinecone-backed RAG, cited answers, notes, quizzes, flashcards (SM-2), and learning analytics.
 
 ---
 
-## 1) Goal of the extension
+## What this project does
 
-Make YouTube lectures usable as a *personal study system* by:
-
-- turning transcripts into a searchable knowledge base
-- letting you ask questions with **retrieval + citations** (timestamps)
-- converting lecture content into **notes, quizzes, and flashcards**
-- tracking how you study (confusion zones + progress heatmap)
-
----
-
-## 2) Features (what it does)
-
-### Playlist-level RAG (shared memory)
-
-- Detects `?list=...` on YouTube watch URLs
-- Indexes each opened video into a **shared playlist knowledge base** stored in **IndexedDB**
-- Chat scope options:
-  - **This video**
-  - **Whole playlist**
-
-**Example:** “What did the instructor say about Dynamic Programming earlier in the course?”
+- Extracts and cleans YouTube transcripts (extension-side)
+- Builds a RAG knowledge base using Gemini embeddings + Pinecone vector search
+- Answers with timestamp citations
+- Generates and syncs: notes, quizzes, flashcards, and chat history
+- Tracks learning analytics (progress + confusion signals)
 
 ---
 
-### Timestamp-cited answers
+## Repo structure
 
-- Chat replies can include **clickable timestamps**
-- Each timestamp can show an excerpt preview
-- In playlist mode, citations can jump you to the exact lecture that contains the answer
-
-**Format:** `03:24 · 14:11` (plus lecture/video title when relevant)
-
----
-
-### Embedding-based retrieval (real RAG)
-
-- Transcript **chunking** and semantic indexing
-- Uses **Gemini `gemini-embedding-001`** embeddings
-- Stores embeddings + retrieval metadata locally in **IndexedDB**
-- Performs **hybrid retrieval**:
-  - cosine similarity over embeddings
-  - merged with keyword retrieval
-
-This is used to ground AI answers in the actual lecture content.
+- **Chrome extension (UI):** `src/` (Vite + React) + content scripts
+- **Backend API:** `backend/` (Express + Prisma)
+  - Gemini (generation + embeddings)
+  - Pinecone (indexing + retrieval)
+  - Postgres (persistence + sync)
+- **Hosted auth app (optional):** `web/` (Clerk sign-in)
+- **Icons & static assets:** `public/`
 
 ---
 
-### Hybrid AI tutor
 
-- Generates study explanations using:
-  - the **video transcript** (what the instructor said)
-  - and **general knowledge** for missing context (definitions, DSA, interview prep, etc.)
-- Tutor modes:
-  - **Concise**
-  - **Deep**
-  - **Interview** (Q&A-style)
+> **Project path:** `second_aprt/yt-studyflow`
 
 ---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Chrome Extension (React + Dexie)                               │
+│  • Transcript extraction (YouTube captions / InnerTube)         │
+│  • Chunk metadata cache (IndexedDB — no local vectors)          │
+│  • Chat, Notes, Quiz, Flashcards, Study, Analytics UI           │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ HTTP via background service worker
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Express Backend (backend/)                                     │
+│  • Gemini generateContent + gemini-embedding-001                  │
+│  • Pinecone vector upsert / query (cosine similarity)           │
+│  • Hybrid retrieval (keyword + semantic)                        │
+│  • Postgres persistence (notes, flashcards, sync)                 │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+        Google Gemini API           Pinecone Index
+```
+
+### RAG Pipeline
+
+```
+Transcript Extraction (extension)
+        ↓
+Transcript Cleaning + Chunking (extension)
+        ↓
+POST /api/rag/index → EmbeddingService (Gemini)
+        ↓
+PineconeService.upsert (metadata: videoId, playlistId, title, text, timestamps)
+        ↓
+User Query
+        ↓
+POST /api/rag/retrieve → embed query (Gemini) + Pinecone query (Top-K, cosine)
+        ↓
+RetrievalService merges keyword + semantic scores
+        ↓
+PromptBuilder → Gemini response → CitationService (timestamps)
+```
+
+### Backend Services
+
+| Service | Responsibility |
+|---------|----------------|
+| `embedding.service.ts` | Gemini embedding generation (document + query) |
+| `pinecone.service.ts` | Vector upsert, query, namespace, metadata filtering |
+| `retrieval.service.ts` | Hybrid keyword + semantic merge & rank |
+| `rag.service.ts` | Pipeline orchestrator (index + retrieve) |
+| `promptBuilder.service.ts` | Chat / tutor prompt assembly |
+| `citation.service.ts` | Timestamp citations from retrieved chunks |
+| `gemini.service.ts` | Text generation |
+
+### Pinecone Integration
+
+- **Index:** configured via `PINECONE_INDEX` (default `yt-studyflow`)
+- **Namespace:** `{PINECONE_NAMESPACE_}{userId}_{videoId}` — isolates vectors per user/video
+- **Metric:** cosine similarity (Pinecone default for most indexes)
+- **Metadata per vector:**
+  - `videoId`, `playlistId`, `title`, `text`, `startTime`, `endTime`
+- **Filtering:** queries can filter by `videoId` and `playlistId` metadata
+- **Top-K:** configurable per request (chat uses 14 by default)
+
+### Authentication (temporarily disabled)
+
+Clerk auth code is **preserved but bypassed**. Set `AUTH_DISABLED=false` in backend and extension `auth.config.ts` to re-enable.
+
+Files kept intact with `TODO:` markers:
+- `backend/src/middleware/auth.ts`
+- `src/lib/api/auth.ts`, `auth.store.ts`
+- `web/` hosted Clerk sign-in app
+- `public/auth/callback.html`
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- Node 18+
+- [Gemini API key](https://aistudio.google.com/apikey)
+- [Pinecone account](https://www.pinecone.io/) + index (dimension **768** for `gemini-embedding-001`)
+- Optional: Supabase Postgres for cloud sync
 
 ### Multi-video revision (SM-2 spaced repetition)
 
@@ -136,56 +188,96 @@ Workflow (high-level):
 2. Install and build:
 
 ```bash
-cd second_aprt/yt-studyflow
+cd backend
+cp .env.example .env
+# Set GEMINI_API_KEY, PINECONE_API_KEY, PINECONE_INDEX
+npm install
+npm run dev
+```
+
+Server runs at `http://localhost:3001`.
+
+### 2. Extension
+
+```bash
+cd yt-studyflow
+cp .env.example .env
+# VITE_API_BASE_URL=http://localhost:3001
 npm install
 npm run build
 ```
 
-3. Chrome:
-   - Go to `chrome://extensions`
-   - Enable **Developer mode**
-   - Click **Load unpacked**
-   - Select the extension’s `dist/` folder
+Load `dist/` in Chrome → `chrome://extensions` → Load unpacked.
 
-### Configure the Gemini API key
-
-1. Copy `.env.example` → `.env`
-2. Set your key:
-
-- `VITE_GEMINI_API_KEY=your_key`
-
-3. Rebuild and reload the extension:
+### 3. Auth web app (optional — only when re-enabling auth)
 
 ```bash
-npm run build
+cd web
+cp .env.example .env
+npm install
+npm run dev
 ```
 
-### Use (day-to-day)
-
-- Open a lecture on YouTube (ideally a video inside a playlist)
-- Let the extension index transcripts as you watch
-
-Common workflows:
-
-| Goal | Steps |
-|------|--------|
-| Playlist RAG | Open videos from the same playlist so the shared IndexedDB knowledge base is built |
-| Cross-lecture chat | Chat → **Whole playlist** |
-| Vector-grounded answers | Requires API key; retrieval uses embedded transcript chunks |
-| Study path | **Study** tab → enter topic → build the learning path |
-| Course flashcards | **Revision** tab → generate flashcards after enough playlist content is indexed |
+Runs at `http://localhost:5174`.
 
 ---
 
-## Privacy
+## Environment Variables
 
-- Gemini API key is provided via `.env` at build-time (`VITE_GEMINI_API_KEY`).
-- Transcripts and embeddings are stored **locally** in IndexedDB.
-- Gemini requests are proxied through the extension background worker (so the key is not directly used in page JS).
+### Extension (`.env`)
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_API_BASE_URL` | Backend URL |
+| `VITE_AUTH_WEB_URL` | Hosted Clerk app (when auth enabled) |
+
+### Backend (`backend/.env`)
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `GEMINI_API_KEY` | Yes | Embeddings + generation |
+| `PINECONE_API_KEY` | Yes (prod) | Vector storage |
+| `PINECONE_INDEX` | No | Index name (default `yt-studyflow`) |
+| `PINECONE_NAMESPACE` | No | Optional namespace prefix |
+| `AUTH_DISABLED` | No | Bypass Clerk JWT (default `true` in dev) |
+| `GUEST_USER_ID` | No | User id when auth disabled |
+| `DATABASE_URL` | Prod | Postgres for sync |
+| `CLERK_SECRET_KEY` | When auth on | JWT verification |
+
+---
+
+## Features
+
+- **Chat** with hybrid RAG + timestamp citations
+- **Notes** generation from transcript context
+- **Quiz & flashcards** with SM-2 spaced repetition
+- **Playlist-level RAG** — shared memory across lectures
+- **Study mode** — learning paths with mastery tracking
+- **Analytics** — confusion zones + progress heatmap
+
+---
+
+## IndexedDB vs Pinecone
+
+| Data | Storage |
+|------|---------|
+| Transcript segments | Dexie (local) |
+| Semantic chunk metadata | Dexie (local) |
+| **Embeddings / vectors** | **Pinecone (server)** |
+| Notes, flashcards, chat history | Dexie + Postgres sync |
+
+---
+
+## Re-enabling Authentication
+
+1. Set `AUTH_DISABLED=false` in `backend/.env`
+2. Set `AUTH_DISABLED = false` in `src/lib/config/auth.config.ts`
+3. Set Clerk keys in backend + `web/.env`
+4. Start the `web/` app for Google sign-in
+5. Remove guest bypass blocks marked with `TODO:`
 
 ---
 
 ## License
 
 MIT — side project for learning; not affiliated with Google or YouTube.
-

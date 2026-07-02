@@ -1,20 +1,40 @@
 import { GEMINI, VECTOR_SEARCH } from '@lib/constants';
 import { DbIds, ensureDbReady, getDb, nowMs } from '@lib/db';
 import type { Flashcard, SemanticChunk } from '@/types/ai';
-import { canUseGeminiApi } from '@lib/storage';
+import { canUseGeminiApi, getSettings } from '@lib/storage';
 import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildFlashcardsPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localFlashcards } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
 import { defaultSm2State } from './sm2';
+import { scheduleSync, syncPlaylistScope, syncVideoScope, canSync } from '@/lib/sync/engine';
+import { api } from '@lib/api/client';
 
 export async function clearFlashcardsForVideo(videoId: string): Promise<void> {
   await ensureDbReady();
-  await getDb().flashcards.where('videoId').equals(videoId).delete();
+  const db = getDb();
+  const rows = await db.flashcards.where('videoId').equals(videoId).toArray();
+  if (await canSync()) {
+    for (const row of rows) {
+      if (row.remoteId) {
+        try {
+          await api.delete(`/api/flashcards/${row.remoteId}`);
+        } catch {
+          // offline — local clear only
+        }
+      }
+    }
+  }
+  await db.flashcards.where('videoId').equals(videoId).delete();
 }
 
 export async function listFlashcardsByPlaylist(playlistId: string): Promise<Flashcard[]> {
   await ensureDbReady();
+  try {
+    await syncPlaylistScope(playlistId);
+  } catch {
+    // offline — serve Dexie cache
+  }
   const rows = await getDb().flashcards.where('playlistId').equals(playlistId).toArray();
   return rows.map((r) => ({
     id: r.id,
@@ -53,10 +73,12 @@ export async function generateFlashcardsForPlaylist(params: {
   }
 
   const gemini = await createGeminiService();
+  const settings = await getSettings();
   const { system, user } = buildFlashcardsPrompt({
     videoTitle: params.videoTitle ?? 'Playlist course',
     maxCards,
     context,
+    language: settings.responseLanguage,
   });
   const resp = await gemini.generateText({
     model: GEMINI.CHAT_MODEL,
@@ -108,8 +130,10 @@ export async function generateFlashcardsForPlaylist(params: {
       createdAt: ts,
       updatedAt: ts,
       schemaVersion: 2,
+      dirty: true,
     });
   }
+  scheduleSync();
   return cards;
 }
 
@@ -159,18 +183,22 @@ export async function generateFlashcardsForVideo(params: {
         easeFactor: card.easeFactor,
         createdAt: card.createdAt,
         updatedAt: card.createdAt,
-        schemaVersion: 1,
+        schemaVersion: 3,
+        dirty: true,
       });
     }
+    scheduleSync();
     return local;
   }
 
   try {
     const gemini = await createGeminiService();
+    const settings = await getSettings();
     const { system, user } = buildFlashcardsPrompt({
       videoTitle: params.videoTitle,
       maxCards,
       context,
+      language: settings.responseLanguage,
     });
 
     const resp = await gemini.generateText({
@@ -215,9 +243,11 @@ export async function generateFlashcardsForVideo(params: {
         easeFactor: card.easeFactor,
         createdAt: card.createdAt,
         updatedAt: card.createdAt,
-        schemaVersion: 1,
+        schemaVersion: 3,
+        dirty: true,
       });
     }
+    scheduleSync();
     return local;
   }
 
@@ -257,15 +287,22 @@ export async function generateFlashcardsForVideo(params: {
       easeFactor: card.easeFactor,
       createdAt: ts,
       updatedAt: ts,
-      schemaVersion: 1,
+      schemaVersion: 3,
+      dirty: true,
     });
   }
 
+  scheduleSync();
   return cards;
 }
 
 export async function listFlashcards(videoId: string): Promise<Flashcard[]> {
   await ensureDbReady();
+  try {
+    await syncVideoScope(videoId);
+  } catch {
+    // offline — serve Dexie cache
+  }
   const rows = await getDb().flashcards.where('videoId').equals(videoId).toArray();
   return rows.map((r) => ({
     id: r.id,
@@ -311,5 +348,7 @@ export async function gradeFlashcard(
     nextReviewDate: next.nextReviewDate,
     lastReviewedAt: next.lastReviewedAt,
     updatedAt: Date.now(),
+    dirty: true,
   });
+  scheduleSync();
 }

@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { getSettings, saveSettings, type Settings } from '@lib/storage';
+import { DEFAULT_RESPONSE_LANGUAGE } from '@lib/languages';
+import type { ResponseLanguageId } from '@lib/languages';
+import { emitLanguageChange } from '@lib/languageEvents';
+import { handleGlobalLanguageChange } from '@lib/languageEffects.service';
 
 interface SettingsState extends Settings {
   loaded: boolean;
@@ -7,11 +11,11 @@ interface SettingsState extends Settings {
   update: (partial: Partial<Settings>) => Promise<void>;
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
-  geminiApiKey: '',
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   autoLoadTranscript: true,
   chatMode: 'concise',
   defaultNoteType: 'concise',
+  responseLanguage: DEFAULT_RESPONSE_LANGUAGE,
   loaded: false,
 
   load: async () => {
@@ -20,7 +24,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   update: async (partial) => {
+    const previous = get().responseLanguage;
     await saveSettings(partial);
     set(partial);
+
+    if (partial.responseLanguage && partial.responseLanguage !== previous) {
+      const next = partial.responseLanguage as ResponseLanguageId;
+      emitLanguageChange(next, previous);
+      void handleGlobalLanguageChange(next, previous);
+    }
   },
 }));

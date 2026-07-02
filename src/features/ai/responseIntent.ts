@@ -19,7 +19,6 @@ export function detectResponseIntent(query: string, uiMode: ChatMode): ResponseI
     return 'interview';
   }
 
-  if (uiMode === 'deep') return 'explain';
   return 'explain';
 }
 
@@ -36,31 +35,31 @@ export function intentInstructions(intent: ResponseIntent, query: string): strin
   switch (intent) {
     case 'bullets':
       return [
-        'FORMAT — Bullet summary (STRICT):',
-        `- Exactly ${n ?? 5} markdown bullets, each starting with **Topic:**`,
-        '- One concrete fact per bullet from the VIDEO transcript (translate Hindi/Hinglish to English).',
-        '- NO Q&A. NO "Here are interview questions". NO preamble longer than one line.',
-        '- First line: one English sentence stating what the lecture covers.',
+        'FORMAT - Bullet study notes:',
+        `- Write exactly ${n ?? 5} markdown bullets.`,
+        '- Each bullet should capture one major concept or useful takeaway, not one transcript line.',
+        '- Merge similar ideas, remove filler, and explain terms briefly when needed.',
+        '- Start with one sentence stating what the lecture section is about.',
       ].join('\n');
     case 'summary':
       return [
-        'FORMAT — Short summary (STRICT):',
-        '- 1 opening sentence + 4–6 markdown bullets OR one tight paragraph (max 120 words).',
-        '- English only. Translate any Hindi/Hinglish from the transcript.',
-        '- NO Q&A format. Answer the summarization request directly.',
+        'FORMAT - Educational summary:',
+        '- Write 1 concise overview paragraph plus 4-6 bullets, or one tight paragraph if the question asks for brevity.',
+        '- Identify major concepts, merge repeated ideas, and remove filler speech.',
+        '- The result should feel like notes from a human instructor.',
       ].join('\n');
     case 'interview':
       return [
-        'FORMAT — Interview prep (only because user asked):',
-        '- 4–6 **Q:** / **A:** pairs in English.',
-        '- Answers: transcript facts first, then "Background:" for general CS.',
+        'FORMAT - Interview prep:',
+        '- Write 4-6 strong **Q:** / **A:** pairs only when interview prep is requested.',
+        '- Answers should synthesize transcript-backed concepts first, then add brief Background when useful.',
       ].join('\n');
     case 'explain':
     default:
       return [
-        'FORMAT — Direct answer:',
-        '- Lead with the answer in 1–3 English sentences.',
-        '- Then bullets or short sections as needed. NO generic Q&A unless user asked for interview prep.',
+        'FORMAT - Direct explanation:',
+        '- Lead with the answer in 1-3 clear sentences.',
+        '- Then use short sections or bullets for intuition, steps, examples, and key takeaways.',
       ].join('\n');
   }
 }

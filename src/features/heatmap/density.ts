@@ -129,3 +129,28 @@ export function detectConfusionZones(
 
   return merged.sort((a, b) => b.score - a.score).slice(0, 8);
 }
+
+export type BucketEventStats = {
+  rewinds: number;
+  pauses: number;
+  longPauses: number;
+  seeks: number;
+  confusionScore: number;
+};
+
+export function getBucketEventStats(
+  events: LearningEvent[],
+  startTime: number,
+  endTime: number
+): BucketEventStats {
+  const inRange = events.filter((e) => e.time >= startTime && e.time < endTime);
+  const rewinds = inRange.filter((e) => e.type === 'rewind').length;
+  const pauses = inRange.filter((e) => e.type === 'pause').length;
+  const longPauses = inRange.filter((e) => e.type === 'long_pause').length;
+  const seeks = inRange.filter((e) => e.type === 'seek').length;
+  const confusionScore = Math.min(
+    1,
+    (rewinds * 0.35 + longPauses * 0.3 + pauses * 0.15 + seeks * 0.2) / 4
+  );
+  return { rewinds, pauses, longPauses, seeks, confusionScore };
+}

@@ -2,12 +2,19 @@ import { DbIds, ensureDbReady, getDb, nowMs } from '@lib/db';
 import { readPlaylistFromPage, scrapePlaylistVideosFromPage } from '@lib/playlist';
 import type { PlaylistInfo, SemanticChunk } from '@/types/ai';
 import { GEMINI } from '@lib/constants';
+import { scheduleSync } from '@/lib/sync/engine';
 
 export async function syncPlaylistFromPage(): Promise<PlaylistInfo | null> {
   const info = readPlaylistFromPage();
   if (!info) return null;
 
   await ensureDbReady();
+  try {
+    const { pullPlaylists } = await import('@/lib/sync/playlists.sync');
+    await pullPlaylists();
+  } catch {
+    // offline — serve Dexie cache
+  }
   const ts = nowMs();
   const existing = await getDb().playlists.get(DbIds.playlist(info.playlistId));
   const mergedIds = [...new Set([...(existing?.videoIds ?? []), ...info.videoIds])];
@@ -32,13 +39,22 @@ export async function syncPlaylistFromPage(): Promise<PlaylistInfo | null> {
     createdAt: existing?.createdAt ?? ts,
     updatedAt: ts,
     schemaVersion: 2,
+    dirty: true,
   });
+
+  scheduleSync();
 
   return { ...info, videoIds: mergedIds };
 }
 
 export async function getPlaylist(playlistId: string): Promise<PlaylistInfo | null> {
   await ensureDbReady();
+  try {
+    const { pullPlaylists } = await import('@/lib/sync/playlists.sync');
+    await pullPlaylists();
+  } catch {
+    // offline — serve Dexie cache
+  }
   const row = await getDb().playlists.get(DbIds.playlist(playlistId));
   if (!row) return null;
   return {
@@ -69,7 +85,9 @@ export async function registerVideoInPlaylist(
     createdAt: row?.createdAt ?? ts,
     updatedAt: ts,
     schemaVersion: 2,
+    dirty: true,
   });
+  scheduleSync();
 }
 
 /** Load all indexed chunks for every video in a playlist (playlist-level RAG corpus). */

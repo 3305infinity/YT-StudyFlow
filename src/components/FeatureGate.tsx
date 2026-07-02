@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertCircle, Key, Loader2, Sparkles } from 'lucide-react';
+import { AlertCircle, Loader2, LogIn, Sparkles } from 'lucide-react';
 import { useAiReadiness } from '@/hooks/useAiReadiness';
 import { useUiStore } from '@/store/ui.store';
 
@@ -18,8 +18,8 @@ export function FeatureGate({
   }
 
   const icon =
-    readiness.state === 'no-key' ? (
-      <Key className="h-7 w-7 text-accent-muted" />
+    readiness.state === 'no-auth' ? (
+      <LogIn className="h-7 w-7 text-accent-muted" />
     ) : readiness.state === 'building-index' || readiness.state === 'loading-transcript' ? (
       <Loader2 className="h-7 w-7 animate-spin text-accent-muted" />
     ) : readiness.state === 'index-error' ? (
@@ -40,8 +40,8 @@ export function FeatureGate({
         <div className={compact ? 'shrink-0 pt-0.5' : 'mx-auto mb-3'}>{icon}</div>
         <div className={compact ? 'min-w-0' : ''}>
           <p className="text-sm font-medium text-white">
-            {readiness.state === 'no-key'
-              ? 'API key required'
+            {readiness.state === 'no-auth'
+              ? 'Sign in required'
               : readiness.state === 'loading-transcript'
                 ? 'Loading transcript'
                 : readiness.state === 'building-index'
@@ -54,14 +54,17 @@ export function FeatureGate({
           {'stage' in readiness && readiness.stage && (
             <p className="mt-1 text-[11px] text-white/40">{readiness.stage}</p>
           )}
-          {readiness.state === 'no-key' && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              className="mt-3 rounded-xl bg-accent/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/35"
-            >
-              Open Settings
-            </button>
+          {readiness.state === 'no-auth' && (
+            <>
+              <p className="mt-1 text-[11px] text-white/45">Free Google sign-in · no API keys</p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className="mt-3 rounded-xl bg-accent/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/35"
+              >
+                Sign in via Profile
+              </button>
+            </>
           )}
           {readiness.state === 'no-transcript' && (
             <button
