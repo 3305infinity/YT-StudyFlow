@@ -11,14 +11,13 @@ export type SemanticChunkInput = {
 
 export type ScoredChunkResult = {
   chunk: SemanticChunkInput & { embedding?: number[] | null };
-  /** Combined rank score used for ordering. */
   score: number;
-  /** Raw keyword match strength 0–1. */
   keywordSimilarity: number;
-  /** Raw vector cosine similarity 0–1 (0 if keyword-only). */
   semanticSimilarity: number;
   sources: Array<'keyword' | 'semantic'>;
 };
+
+export type { PackedContext } from './contextPacking.service.js';
 
 const KEYWORD_WEIGHT = 1.0;
 const SEMANTIC_WEIGHT = 2.5;
@@ -53,16 +52,13 @@ export function keywordSearch(
   topK: number
 ): ScoredChunkResult[] {
   const hits = chunks
-    .map((chunk) => {
-      const kw = keywordScore(query, chunk.text);
-      return {
-        chunk,
-        score: kw * KEYWORD_WEIGHT,
-        keywordSimilarity: kw,
-        semanticSimilarity: 0,
-        sources: ['keyword'] as Array<'keyword' | 'semantic'>,
-      };
-    })
+    .map((chunk) => ({
+      chunk,
+      score: keywordScore(query, chunk.text) * KEYWORD_WEIGHT,
+      keywordSimilarity: keywordScore(query, chunk.text),
+      semanticSimilarity: 0,
+      sources: ['keyword'] as Array<'keyword' | 'semantic'>,
+    }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
@@ -129,8 +125,41 @@ export function mergeHybridResults(
   return [...merged.values()].sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
+export function pineconeHybridResultsToScoredChunks(
+  semantic: Array<{ id: string; score: number; metadata: Record<string, unknown> }>,
+  chunks: SemanticChunkInput[],
+  topK: number
+): ScoredChunkResult[] {
+  const byId = new Map(chunks.map((c) => [c.id, c]));
+  return semantic
+    .map((hit) => {
+      const chunk =
+        byId.get(hit.id) ??
+        ({
+          id: hit.id,
+          text: String(hit.metadata.text ?? ''),
+          startTime: Number(hit.metadata.startTime ?? 0),
+          endTime: Number(hit.metadata.endTime ?? 0),
+          videoId: String(hit.metadata.videoId ?? ''),
+          videoTitle: String(hit.metadata.videoTitle ?? ''),
+          playlistId: String(hit.metadata.playlistId ?? ''),
+        } satisfies SemanticChunkInput);
+
+      return {
+        chunk,
+        score: hit.score,
+        keywordSimilarity: 0,
+        semanticSimilarity: hit.score,
+        sources: ['semantic'] as Array<'keyword' | 'semantic'>,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
+}
+
 export const retrievalService = {
   keywordSearch,
   mergeHybridResults,
+  pineconeHybridResultsToScoredChunks,
   keywordScore,
 };

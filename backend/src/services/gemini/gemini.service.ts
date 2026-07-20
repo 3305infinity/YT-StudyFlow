@@ -32,7 +32,7 @@ export type EmbedOutput = {
 };
 
 export const geminiService = {
-  async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
+   async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
     const model = input.model || GEMINI_DEFAULTS.textModel;
     logDev('generateText:init', {
       model,
@@ -103,6 +103,25 @@ export const geminiService = {
     const text = assertOkResponse(result);
     const data = parseJsonBody<Record<string, unknown>>(text);
     return { model, embeddings: extractBatchEmbeddings(data, input.input.length) };
+  },
+
+  async checkHealth(): Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> {
+    const start = Date.now();
+    try {
+      const model = GEMINI_DEFAULTS.textModel;
+      const result = await geminiPost(`/models/${encodeURIComponent(model)}:generateContent`, {
+        contents: [{ role: 'user', parts: [{ text: 'test' }] }],
+        generationConfig: { maxOutputTokens: 1 },
+      });
+      assertOkResponse(result);
+      return { status: 'healthy', latencyMs: Date.now() - start };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : String(error),
+        latencyMs: Date.now() - start,
+      };
+    }
   },
 };
 

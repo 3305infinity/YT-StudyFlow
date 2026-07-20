@@ -4,6 +4,7 @@ import { geminiService } from './gemini.service.js';
 import { ragService, type ScoredChunkResult } from './rag.service.js';
 import { promptBuilderService } from './promptBuilder.service.js';
 import { citationService, type Citation } from './citation.service.js';
+import { contextPackingService, type PackedContext } from './contextPacking.service.js';
 import { analyzeRetrieval } from './rag/coverage.js';
 import type { CoverageCase } from './rag/coverage.js';
 import { computeConfidence } from './rag/confidence.js';
@@ -12,6 +13,10 @@ import { lectureRelatedTopicsFromRetrieval } from './rag/relatedTopics.js';
 import { coverageToMode } from './rag/responseMode.js';
 import type { ResponseMode } from './rag/responseMode.js';
 import { ragDevLog } from './rag/devLog.js';
+import { metricsService } from './metrics.service.js';
+import { retrievalMetrics, type RetrievalMetrics } from './retrievalMetrics.js';
+import { requestDeduplicator } from '../performance/requestDeduplicator.js';
+import { withTimeout } from '../reliability/timeout.js';
 
 export type RetrievalMetadata = {
   coverage: CoverageCase;
@@ -123,7 +128,7 @@ function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJs
 }
 
 export const chatStructuredService = {
-  async send(params: {
+   async send(params: {
     userId: string;
     question: string;
     videoId: string;
@@ -134,148 +139,168 @@ export const chatStructuredService = {
     chunks: Parameters<typeof ragService.retrieve>[0]['chunks'];
     topK?: number;
   }): Promise<StructuredChatResponse> {
-    const language = normalizeLanguageId(params.language);
-    const topK = params.topK ?? 14;
+    const dedupeKey = `chat:${params.userId}:${params.videoId}:${params.question}:${params.mode ?? 'concise'}`;
 
-    const retrieved: ScoredChunkResult[] = await ragService.retrieve({
-      userId: params.userId,
-      videoId: params.videoId,
-      question: params.question,
-      chunks: params.chunks,
-      topK,
-      playlistId: params.playlistId,
-    });
+    if (requestDeduplicator.hasPending(dedupeKey)) {
+      ragDevLog('request-dedup', { key: dedupeKey, status: 'waiting' });
+    }
 
-    const analysis = analyzeRetrieval(retrieved);
-    const responseMode = coverageToMode(analysis.coverage);
-    const { score: confidence, label: confidenceLabel } = computeConfidence(analysis);
-    const lectureRelatedTopics = lectureRelatedTopicsFromRetrieval(retrieved);
+    return requestDeduplicator.execute(dedupeKey, async () => {
+      const language = normalizeLanguageId(params.language);
+      const topK = params.topK ?? 14;
 
-    ragDevLog('structured-retrieval-analysis', {
-      question: params.question,
-      requestedTopK: topK,
-      retrieved: retrieved.length,
-      coverage: analysis.coverage,
-      maxSimilarity: analysis.maxSimilarity,
-      avgTopSimilarity: analysis.avgTopSimilarity,
-      topChunkIds: analysis.topChunkIds,
-      chunkScores: retrieved.slice(0, 8).map((r) => ({
-        id: r.chunk.id,
-        keyword: r.keywordSimilarity,
-        semantic: r.semanticSimilarity,
-        score: r.score,
-      })),
-    });
+      const retrieved: ScoredChunkResult[] = await ragService.retrieve({
+        userId: params.userId,
+        videoId: params.videoId,
+        question: params.question,
+        chunks: params.chunks,
+        topK,
+        playlistId: params.playlistId,
+      });
 
-    const context = retrieved.map((r) => citationService.formatContextLine(r.chunk)).join('\n\n');
-    const { system, user } = promptBuilderService.buildStructuredChatPrompt({
-      mode: params.mode ?? 'concise',
-      language,
-      coverage: analysis.coverage,
-      question: params.question,
-      videoTitle: params.videoTitle,
-      videoId: params.videoId,
-      context,
-      lectureRelatedTopics,
-    });
+      const analysis = analyzeRetrieval(retrieved);
+      const responseMode = coverageToMode(analysis.coverage);
+      const { score: confidence, label: confidenceLabel } = computeConfidence(analysis);
+      const lectureRelatedTopics = lectureRelatedTopicsFromRetrieval(retrieved);
 
-    ragDevLog('prompt', {
-      mode: responseMode,
-      coverage: analysis.coverage,
-      confidence,
-      confidenceLabel,
-      promptLengthChars: system.length + user.length,
-      contextChunks: retrieved.length,
-    });
+      ragDevLog('structured-retrieval-analysis', {
+        question: params.question,
+        requestedTopK: topK,
+        retrieved: retrieved.length,
+        coverage: analysis.coverage,
+        maxSimilarity: analysis.maxSimilarity,
+        avgTopSimilarity: analysis.avgTopSimilarity,
+        topChunkIds: analysis.topChunkIds,
+        chunkScores: retrieved.slice(0, 8).map((r) => ({
+          id: r.chunk.id,
+          keyword: r.keywordSimilarity,
+          semantic: r.semanticSimilarity,
+          score: r.score,
+        })),
+      });
 
-    const geminiStarted = Date.now();
-    ragDevLog('gemini-request', {
-      model: 'gemini-2.5-flash-lite',
-      mode: params.mode ?? 'concise',
-      temperature: 0.28,
-      maxOutputTokens: params.mode === 'deep' ? 1400 : 1000,
-    });
-    const result = await geminiService.generateText({
-      model: 'gemini-2.5-flash-lite',
-      prompt: { system, user },
-      config: {
+      const packedContexts: PackedContext[] = contextPackingService.pack(retrieved);
+      const promptStart = Date.now();
+      const context = packedContexts.map((p) => citationService.formatPackedContextLine(p)).join('\n\n');
+      const { system, user } = promptBuilderService.buildStructuredChatPrompt({
+        mode: params.mode ?? 'concise',
+        language,
+        coverage: analysis.coverage,
+        question: params.question,
+        videoTitle: params.videoTitle,
+        videoId: params.videoId,
+        context,
+        lectureRelatedTopics,
+      });
+      const promptLatencyMs = Date.now() - promptStart;
+
+      ragDevLog('prompt', {
+        mode: responseMode,
+        coverage: analysis.coverage,
+        confidence,
+        confidenceLabel,
+        promptLengthChars: system.length + user.length,
+        contextChunks: retrieved.length,
+      });
+
+const geminiStarted = Date.now();
+      ragDevLog('gemini-request', {
+        model: 'gemini-2.5-flash-lite',
+        mode: params.mode ?? 'concise',
         temperature: 0.28,
         maxOutputTokens: params.mode === 'deep' ? 1400 : 1000,
-      },
+      });
+      let result;
+      try {
+        result = await withTimeout(
+          geminiService.generateText({
+            model: 'gemini-2.5-flash-lite',
+            prompt: { system, user },
+            config: {
+              temperature: 0.28,
+              maxOutputTokens: params.mode === 'deep' ? 1400 : 1000,
+            },
+          }),
+          { timeoutMs: 15000, serviceName: 'gemini' }
+        );
+      } catch (error) {
+        ragDevLog('gemini-failed', { error: String(error) });
+        throw error;
+      }
+      const generationLatencyMs = Date.now() - geminiStarted;
+
+      ragDevLog('gemini-response', {
+        model: result.model,
+        tokensUsed: result.tokensUsed,
+        latencyMs: generationLatencyMs,
+        contentLength: result.content.length,
+      });
+
+      const parsed = parseStructuredJson(result.content, analysis.coverage);
+      ragDevLog('structured-parse-success', {
+        summaryLength: parsed.summary.length,
+        lectureContentLength: parsed.lectureContent.length,
+        additionalExplanationLength: parsed.additionalExplanation.length,
+        generalKnowledgeLength: parsed.generalKnowledge.length,
+        keyTakeaways: parsed.keyTakeaways.length,
+      });
+      const citations = citationService.buildCitations(
+        retrieved.map((r) => ({ chunk: r.chunk, score: r.score }))
+      );
+
+      const sources = retrieved.map((r) => ({
+        chunkId: r.chunk.id,
+        videoId: r.chunk.videoId,
+        videoTitle: r.chunk.videoTitle,
+        startTime: r.chunk.startTime,
+        endTime: r.chunk.endTime,
+        excerpt: r.chunk.text.slice(0, 220).trim(),
+        similarityScore: Math.max(r.semanticSimilarity, r.keywordSimilarity),
+      }));
+
+      const suggestedRelatedTopics =
+        analysis.coverage === 'none'
+          ? parsed.suggestedRelatedTopics
+          : parsed.suggestedRelatedTopics.filter(
+              (t) => !lectureRelatedTopics.some((l) => l.toLowerCase() === t.toLowerCase())
+            );
+
+      const retrievalMetadata: RetrievalMetadata = {
+        coverage: analysis.coverage,
+        confidenceLabel,
+        maxSimilarity: analysis.maxSimilarity,
+        avgTopSimilarity: analysis.avgTopSimilarity,
+        chunkCount: analysis.chunkCount,
+        topChunkIds: analysis.topChunkIds,
+        promptLengthChars: system.length + user.length,
+        geminiLatencyMs: generationLatencyMs,
+      };
+
+      return {
+        mode: responseMode,
+        summary: parsed.summary,
+        lectureContent: parsed.lectureContent,
+        additionalExplanation: parsed.additionalExplanation,
+        generalKnowledge: parsed.generalKnowledge,
+        keyTakeaways: parsed.keyTakeaways,
+        lectureRelatedTopics,
+        suggestedRelatedTopics,
+        relatedTopics: [...lectureRelatedTopics, ...suggestedRelatedTopics],
+        coverage: analysis.coverage,
+        confidence,
+        confidenceLabel,
+        citations,
+        sources,
+        retrievalMetadata,
+        model: result.model,
+        tokensUsed: result.tokensUsed,
+        lectureAnswer: parsed.lectureContent,
+        explanation: [parsed.lectureContent, parsed.additionalExplanation, parsed.generalKnowledge]
+          .filter(Boolean)
+          .join('\n\n'),
+        keyPoints: parsed.keyTakeaways,
+        confidenceScore: confidence,
+      };
     });
-    const geminiLatencyMs = Date.now() - geminiStarted;
-
-    ragDevLog('gemini-response', {
-      model: result.model,
-      tokensUsed: result.tokensUsed,
-      latencyMs: geminiLatencyMs,
-      contentLength: result.content.length,
-    });
-
-    const parsed = parseStructuredJson(result.content, analysis.coverage);
-    ragDevLog('structured-parse-success', {
-      summaryLength: parsed.summary.length,
-      lectureContentLength: parsed.lectureContent.length,
-      additionalExplanationLength: parsed.additionalExplanation.length,
-      generalKnowledgeLength: parsed.generalKnowledge.length,
-      keyTakeaways: parsed.keyTakeaways.length,
-    });
-    const citations = citationService.buildCitations(
-      retrieved.map((r) => ({ chunk: r.chunk, score: r.score }))
-    );
-
-    const sources = retrieved.map((r) => ({
-      chunkId: r.chunk.id,
-      videoId: r.chunk.videoId,
-      videoTitle: r.chunk.videoTitle,
-      startTime: r.chunk.startTime,
-      endTime: r.chunk.endTime,
-      excerpt: r.chunk.text.slice(0, 220).trim(),
-      similarityScore: Math.max(r.semanticSimilarity, r.keywordSimilarity),
-    }));
-
-    const suggestedRelatedTopics =
-      analysis.coverage === 'none'
-        ? parsed.suggestedRelatedTopics
-        : parsed.suggestedRelatedTopics.filter(
-            (t) => !lectureRelatedTopics.some((l) => l.toLowerCase() === t.toLowerCase())
-          );
-
-    const retrievalMetadata: RetrievalMetadata = {
-      coverage: analysis.coverage,
-      confidenceLabel,
-      maxSimilarity: analysis.maxSimilarity,
-      avgTopSimilarity: analysis.avgTopSimilarity,
-      chunkCount: analysis.chunkCount,
-      topChunkIds: analysis.topChunkIds,
-      promptLengthChars: system.length + user.length,
-      geminiLatencyMs,
-    };
-
-    return {
-      mode: responseMode,
-      summary: parsed.summary,
-      lectureContent: parsed.lectureContent,
-      additionalExplanation: parsed.additionalExplanation,
-      generalKnowledge: parsed.generalKnowledge,
-      keyTakeaways: parsed.keyTakeaways,
-      lectureRelatedTopics,
-      suggestedRelatedTopics,
-      relatedTopics: [...lectureRelatedTopics, ...suggestedRelatedTopics],
-      coverage: analysis.coverage,
-      confidence,
-      confidenceLabel,
-      citations,
-      sources,
-      retrievalMetadata,
-      model: result.model,
-      tokensUsed: result.tokensUsed,
-      lectureAnswer: parsed.lectureContent,
-      explanation: [parsed.lectureContent, parsed.additionalExplanation, parsed.generalKnowledge]
-        .filter(Boolean)
-        .join('\n\n'),
-      keyPoints: parsed.keyTakeaways,
-      confidenceScore: confidence,
-    };
   },
 };

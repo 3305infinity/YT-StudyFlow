@@ -1,13 +1,13 @@
-import { Pinecone } from '@pinecone-database/pinecone';
+import { Pinecone, type RecordSparseValues } from '@pinecone-database/pinecone';
 
 import { env } from '../config/env.js';
 
 import { withRetry } from '../utils/retry.js';
 
+import { generateQuerySparseVector, generateSparseVector } from '../utils/sparseEncoding.js';
 
 
 let client: Pinecone | null = null;
-
 
 
 function getClient(): Pinecone {
@@ -29,7 +29,6 @@ function getClient(): Pinecone {
 }
 
 
-
 export function pineconeNamespace(userId: string, videoId: string): string {
 
   const prefix = env.pineconeNamespace ? `${env.pineconeNamespace}_` : '';
@@ -37,7 +36,6 @@ export function pineconeNamespace(userId: string, videoId: string): string {
   return `${prefix}${userId}_${videoId}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
 
 }
-
 
 
 export type VectorChunk = {
@@ -61,7 +59,6 @@ export type VectorChunk = {
 };
 
 
-
 export type PineconeQueryFilter = {
 
   videoId?: string;
@@ -69,7 +66,6 @@ export type PineconeQueryFilter = {
   playlistId?: string;
 
 };
-
 
 
 function buildMetadataFilter(filter?: PineconeQueryFilter): Record<string, unknown> | undefined {
@@ -91,7 +87,6 @@ function buildMetadataFilter(filter?: PineconeQueryFilter): Record<string, unkno
 }
 
 
-
 export const pineconeService = {
 
   isEnabled(): boolean {
@@ -99,7 +94,6 @@ export const pineconeService = {
     return !!env.pineconeApiKey;
 
   },
-
 
 
   async upsertChunks(params: {
@@ -114,8 +108,6 @@ export const pineconeService = {
 
     if (!params.chunks.length) return;
 
-
-
     await withRetry(async () => {
 
       const pc = getClient();
@@ -124,42 +116,63 @@ export const pineconeService = {
 
       const namespace = pineconeNamespace(params.userId, params.videoId);
 
-
-
       await index.namespace(namespace).upsert(
 
-        params.chunks.map((c) => ({
+        params.chunks.map((c) => {
 
-          id: c.id,
+          const sparseValues = generateSparseVector(c.text);
 
-          values: c.embedding,
+          const record: {
 
-          metadata: {
+            id: string;
 
-            text: c.text.slice(0, 1000),
+            values: number[];
 
-            title: (c.title ?? c.videoTitle ?? '').slice(0, 200),
+            sparseValues?: RecordSparseValues;
 
-            startTime: c.startTime,
+            metadata: Record<string, string | number | string[]>;
 
-            endTime: c.endTime,
+          } = {
 
-            videoId: c.videoId,
+            id: c.id,
 
-            videoTitle: c.videoTitle ?? '',
+            values: c.embedding,
 
-            playlistId: c.playlistId ?? '',
+            metadata: {
 
-          },
+              text: c.text.slice(0, 1000),
 
-        }))
+              title: (c.title ?? c.videoTitle ?? '').slice(0, 200),
+
+              startTime: c.startTime,
+
+              endTime: c.endTime,
+
+              videoId: c.videoId,
+
+              videoTitle: c.videoTitle ?? '',
+
+              playlistId: c.playlistId ?? '',
+
+            },
+
+          };
+
+          if (sparseValues.indices.length > 0) {
+
+            record.sparseValues = sparseValues;
+
+          }
+
+          return record;
+
+        })
 
       );
 
     }, { label: 'pinecone.upsert' });
 
   },
-
 
 
   async query(params: {
@@ -174,7 +187,9 @@ export const pineconeService = {
 
     filter?: PineconeQueryFilter;
 
-  }): Promise<Array<{ id: string; score: number; metadata: Record<string, unknown> }>> {
+    queryText?: string;
+
+  }): Promise<Array<{ id: string; score: number; metadata: Record<string, unknown>; values?: number[] }>> {
 
     return withRetry(async () => {
 
@@ -184,6 +199,8 @@ export const pineconeService = {
 
       const namespace = pineconeNamespace(params.userId, params.videoId);
 
+      const sparseVector = params.queryText ? generateQuerySparseVector(params.queryText) : undefined;
+
       const result = await index.namespace(namespace).query({
 
         vector: params.queryEmbedding,
@@ -192,11 +209,13 @@ export const pineconeService = {
 
         includeMetadata: true,
 
+        includeValues: true,
+
         filter: buildMetadataFilter(params.filter),
 
+        sparseVector: sparseVector?.indices.length ? sparseVector : undefined,
+
       });
-
-
 
       return (result.matches ?? []).map((m) => ({
 
@@ -206,12 +225,13 @@ export const pineconeService = {
 
         metadata: (m.metadata ?? {}) as Record<string, unknown>,
 
+        values: m.values,
+
       }));
 
     }, { label: 'pinecone.query' });
 
   },
-
 
 
   async deleteVideo(userId: string, videoId: string): Promise<void> {
@@ -229,7 +249,6 @@ export const pineconeService = {
 };
 
 
-
 export function assertPineconeConfigured(): void {
 
   if (!pineconeService.isEnabled()) {
@@ -240,3 +259,24 @@ export function assertPineconeConfigured(): void {
 
 }
 
+export const pineconeHealth = {
+  async check(): Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> {
+    if (!pineconeService.isEnabled()) {
+      return { status: 'unhealthy', error: 'PINECONE_API_KEY not configured' };
+    }
+
+    const start = Date.now();
+    try {
+      const pc = getClient();
+      const index = pc.index(env.pineconeIndex);
+      await index.describeIndexStats();
+      return { status: 'healthy', latencyMs: Date.now() - start };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : String(error),
+        latencyMs: Date.now() - start,
+      };
+    }
+  },
+};
