@@ -2,6 +2,8 @@
 
 A production-grade RAG system for YouTube video content analysis with intelligent retrieval, context packing, and performance optimization.
 
+<img width="433" height="675" alt="image" src="https://github.com/user-attachments/assets/62af9024-f3a6-4502-a88b-43d708bc232e" />
+
 ## Overview
 
 YT StudyFlow transforms YouTube videos into interactive study companions. Upload a video URL, and the system automatically processes transcripts, generates embeddings, and enables semantic search with follow-up question support.
