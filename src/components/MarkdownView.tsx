@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 
-/** Lightweight markdown renderer — tuned for readable study notes. */
+/**
+ * Lightweight markdown renderer — tuned for readable study notes / AI answers.
+ *
+ * Typography pass: design-system tokens only. Parsing is unchanged.
+ * Only headings, paragraphs, lists, blockquotes, inline code and emphasis
+ * are rendered by this component (no fenced code blocks / tables / hr / links
+ * are produced by the current parser, so none are introduced here).
+ */
 
 function inlineFormat(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
@@ -13,7 +20,7 @@ function inlineFormat(text: string): ReactNode[] {
     const token = match[0];
     if (token.startsWith('**')) {
       parts.push(
-        <strong key={match.index} className="font-semibold text-white">
+        <strong key={match.index} className="font-semibold text-content">
           {token.slice(2, -2)}
         </strong>
       );
@@ -21,14 +28,14 @@ function inlineFormat(text: string): ReactNode[] {
       parts.push(
         <code
           key={match.index}
-          className="rounded-md bg-indigo-500/15 px-1.5 py-0.5 font-mono text-[0.9em] text-indigo-100"
+          className="rounded-md border border-line bg-surface-overlay px-1.5 py-0.5 font-mono text-[0.85em] text-content"
         >
           {token.slice(1, -1)}
         </code>
       );
     } else {
       parts.push(
-        <em key={match.index} className="text-white/90">
+        <em key={match.index} className="italic text-content-muted">
           {token.slice(1, -1)}
         </em>
       );
@@ -53,8 +60,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
         key={`ul-${nodes.length}`}
         className={
           isNotes
-            ? 'my-3 ml-5 list-disc space-y-2 text-[15px] leading-relaxed text-white/88 marker:text-indigo-300/80'
-            : 'my-2 ml-4 list-disc space-y-1 text-sm text-white/85'
+            ? 'my-3 ml-5 list-disc space-y-2 text-body leading-[1.7] text-content-muted marker:text-brand/70'
+            : 'my-3 ml-5 list-disc space-y-2 text-body leading-[1.7] text-content-muted marker:text-brand/70'
         }
       >
         {listItems.map((item, i) => (
@@ -86,8 +93,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'mb-2 mt-5 text-sm font-semibold tracking-wide text-indigo-200/95'
-              : 'mb-1 mt-3 text-sm font-semibold text-white'
+              ? 'mb-2 mt-5 text-caption font-semibold uppercase tracking-wide text-content-muted'
+              : 'mb-2 mt-4 text-caption font-semibold uppercase tracking-wide text-content-muted'
           }
         >
           {inlineFormat(trimmed.slice(5))}
@@ -99,8 +106,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'mb-2 mt-6 border-b border-white/10 pb-1.5 text-base font-semibold text-white'
-              : 'mb-1 mt-4 text-sm font-semibold text-white'
+              ? 'mb-2 mt-6 border-b border-line pb-1.5 text-subheading font-semibold text-content'
+              : 'mb-2 mt-5 text-subheading font-semibold text-content'
           }
         >
           {inlineFormat(trimmed.slice(4))}
@@ -112,8 +119,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'mb-3 mt-7 text-lg font-semibold tracking-tight text-white'
-              : 'mb-2 mt-4 text-base font-semibold text-white'
+              ? 'mb-2.5 mt-7 text-heading font-semibold tracking-tight text-content'
+              : 'mb-2 mt-6 text-heading font-semibold tracking-tight text-content'
           }
         >
           {inlineFormat(trimmed.slice(3))}
@@ -125,8 +132,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'mb-3 mt-2 text-xl font-bold tracking-tight text-white'
-              : 'mb-2 mt-2 text-lg font-semibold text-white'
+              ? 'mb-3 mt-2 text-display font-bold tracking-tight text-content'
+              : 'mb-3 mt-4 text-display font-bold tracking-tight text-content'
           }
         >
           {inlineFormat(trimmed.slice(2))}
@@ -136,7 +143,7 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
       nodes.push(
         <blockquote
           key={nodes.length}
-          className="my-3 border-l-2 border-indigo-400/50 bg-white/[0.04] py-2 pl-4 pr-2 text-[15px] leading-relaxed text-white/80"
+          className="my-3 rounded-r-md border-l-2 border-brand/40 bg-brand/[0.06] py-2.5 pl-4 pr-3 text-body leading-[1.7] text-content-muted"
         >
           {inlineFormat(trimmed.slice(2))}
         </blockquote>
@@ -147,8 +154,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'my-2.5 text-[15px] leading-[1.8] text-white/88'
-              : 'my-1.5 text-sm leading-7 text-white/85'
+              ? 'my-2.5 text-body leading-[1.75] text-content-muted'
+              : 'my-2.5 text-body leading-[1.75] text-content-muted'
           }
         >
           {inlineFormat(trimmed)}
@@ -162,8 +169,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
     <div
       className={
         isNotes
-          ? 'markdown-view notes-prose max-w-none font-[Inter,Segoe_UI,system-ui,sans-serif] antialiased'
-          : 'markdown-view'
+          ? 'markdown-view notes-prose max-w-none font-sans antialiased'
+          : 'markdown-view max-w-none font-sans antialiased'
       }
     >
       {nodes}

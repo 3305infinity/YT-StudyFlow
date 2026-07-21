@@ -4,7 +4,7 @@ import { env } from '../../config/env.js';
 export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export const GEMINI_DEFAULTS = {
-  textModel: 'gemini-2.5-flash-lite',
+  textModel: 'gemini-3.5-flash',
   embeddingModel: 'gemini-embedding-001',
   requestTimeoutMs: 30_000,
   maxRetries: 2,

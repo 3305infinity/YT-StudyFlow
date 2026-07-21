@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from 'react';
-import { FileText, Settings, X } from 'lucide-react';
+import { FileText, Settings, X, GraduationCap } from 'lucide-react';
 
 import { TranscriptPanel } from '@/features/transcript/TranscriptPanel';
 import { ChatPanel } from '@/features/chat/ChatPanel';
@@ -60,60 +60,81 @@ export function SidebarLayout({
   );
 
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const isUtility = Boolean(utilityPanel);
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-neutral-950 text-neutral-100">
-      <header className="shrink-0 border-b border-neutral-800 px-4 py-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{title ?? 'Loading video…'}</p>
-            {channel && <p className="truncate text-[11px] text-neutral-500">{channel}</p>}
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <LanguageSelector />
-            <button
-              type="button"
-              onClick={() => setActiveTab('transcript')}
-              aria-label="Transcript"
-              className="rounded-md p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
-            >
-              <FileText className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              aria-label="Settings"
-              className="rounded-md p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          </div>
+    <div className="relative flex h-full flex-col overflow-hidden bg-base text-content">
+      {/* ---------- Brand bar ---------- */}
+      <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 pb-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-gradient shadow-cta"
+            aria-hidden
+          >
+            <GraduationCap className="h-4 w-4 text-white" />
+          </span>
+          <span className="truncate text-[15px] font-semibold tracking-tight text-content">
+            YT <span className="text-gradient">StudyFlow</span>
+          </span>
         </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <LanguageSelector />
+          <button
+            type="button"
+            onClick={() => setActiveTab('transcript')}
+            aria-label="Open transcript"
+            className="ds-icon-btn"
+          >
+            <FileText className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('settings')}
+            aria-label="Open settings"
+            className="ds-icon-btn"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* ---------- Now playing ---------- */}
+      <div className="shrink-0 px-4 pb-3">
+        <p className="truncate text-body font-medium text-content">
+          {title ?? 'Loading video…'}
+        </p>
+        {channel && (
+          <p className="mt-0.5 truncate text-caption text-content-subtle">{channel}</p>
+        )}
 
         <div className="mt-3">
-          <div className="mb-1 flex justify-between font-mono text-[10px] text-neutral-500">
+          <div className="mb-1.5 flex justify-between font-mono text-[10px] text-content-subtle">
             <span>{formatTime(currentTime)}</span>
             <span>{duration > 0 ? formatTime(duration) : '--:--'}</span>
           </div>
-          <div className="h-1 overflow-hidden rounded-full bg-neutral-800">
+          <div className="h-1 overflow-hidden rounded-full bg-surface-overlay">
             <div
-              className="h-full rounded-full bg-indigo-500 transition-[width] duration-200"
+              className="h-full rounded-full bg-brand-gradient transition-[width] duration-200"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
 
         {ragStatus === 'building' && ragStage && (
-          <p className="mt-2 text-[10px] text-neutral-500" role="status">
+          <p className="mt-2 text-[10px] text-content-subtle" role="status">
             {ragStage}
           </p>
         )}
+      </div>
 
-        <div className="mt-3">
-          <Tabs items={WORKSPACE_TABS} value={activeTab} onChange={setActiveTab} />
-        </div>
-      </header>
+      {/* ---------- Tab bar ---------- */}
+      <div className="shrink-0 px-4 pb-3">
+        <Tabs items={WORKSPACE_TABS} value={activeTab} onChange={setActiveTab} />
+      </div>
 
+      <div className="h-px shrink-0 bg-line" />
+
+      {/* ---------- Active panel ---------- */}
       <main className="min-h-0 flex-1">
         {activeTab === 'chat' && <ChatPanel onJumpToTime={onJumpToTime} />}
         {activeTab === 'notes' && <NotesPanel videoId={videoId} />}
@@ -123,19 +144,21 @@ export function SidebarLayout({
         )}
       </main>
 
-      {utilityPanel && (
+      {/* ---------- Utility overlay (Transcript / Settings / Export) ---------- */}
+      {isUtility && (
         <div
-          className="absolute inset-0 z-20 flex flex-col bg-neutral-950"
+          className="absolute inset-0 z-20 flex flex-col bg-base"
           role="dialog"
-          aria-label={utilityPanel === 'transcript' ? 'Transcript' : 'Settings'}
+          aria-modal="true"
+          aria-label={utilityPanel === 'transcript' ? 'Transcript' : utilityPanel === 'settings' ? 'Settings' : 'Export'}
         >
-          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2.5">
-            <p className="text-sm font-medium capitalize text-white">{utilityPanel}</p>
+          <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
+            <p className="text-body font-medium capitalize text-content">{utilityPanel}</p>
             <button
               type="button"
               onClick={closeUtility}
               aria-label="Close panel"
-              className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+              className="ds-icon-btn"
             >
               <X className="h-4 w-4" />
             </button>
@@ -149,6 +172,32 @@ export function SidebarLayout({
           </div>
         </div>
       )}
+
+      {/* ---------- Footer ---------- */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-brand-gradient"
+            aria-hidden
+          >
+            <GraduationCap className="h-3 w-3 text-white" />
+          </span>
+          <span className="truncate text-[11px] font-medium text-content-muted">
+            YT StudyFlow
+          </span>
+          <span className="rounded-full border border-line px-1.5 py-0.5 text-[10px] text-content-subtle">
+            v1.0
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('settings')}
+          aria-label="Open profile and settings"
+          className="ds-icon-btn"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

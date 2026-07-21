@@ -2,12 +2,145 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: 'Inter', 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: theme('colors.base');
+    color: theme('colors.content.DEFAULT');
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
 @layer utilities {
-  .glass-panel {
-    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  /* Brand gradient — ONLY for logo, active tab, primary CTA,
+     progress bars, selected states. */
+  .bg-brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      #a855f7 0%,
+      #c026d3 50%,
+      #ec4899 100%
+    );
   }
 
   .text-gradient {
-    @apply bg-gradient-to-r from-white to-indigo-200 bg-clip-text text-transparent;
+    @apply bg-brand-gradient bg-clip-text text-transparent;
+  }
+
+  /* Previously used for glass panels — keep but align to surface token. */
+  .glass-panel {
+    background: theme('colors.surface.raised');
+    border: 1px solid theme('colors.line.DEFAULT');
+    backdrop-filter: blur(12px);
+  }
+}
+
+@layer components {
+  /* ---------- Card: one elevation level, hairline border ---------- */
+  .ds-card {
+    @apply rounded-lg border bg-surface-raised shadow-1;
+    border-color: theme('colors.line.DEFAULT');
+  }
+
+  .ds-card-raised {
+    @apply rounded-lg border bg-surface-overlay shadow-2;
+    border-color: theme('colors.line.DEFAULT');
+  }
+
+  /* ---------- Inputs: shared focus ring + placeholder ---------- */
+  .ds-input {
+    @apply w-full rounded-md border bg-surface px-3 py-2.5 text-body text-content;
+    border-color: theme('colors.line.DEFAULT');
+    transition: border-color 170ms cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 170ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ds-input::placeholder {
+    color: theme('colors.content.subtle');
+  }
+  .ds-input:hover:not(:disabled) {
+    border-color: theme('colors.line.strong');
+  }
+  .ds-input:focus {
+    outline: none;
+    border-color: theme('colors.brand.from');
+    box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.35);
+  }
+  .ds-input:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  /* ---------- Select (dropdown) ---------- */
+  .ds-select {
+    @apply ds-input appearance-none pr-8;
+  }
+
+  /* ---------- Badge / chip ---------- */
+  .ds-badge {
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-label;
+    border-color: theme('colors.line.DEFAULT');
+    color: theme('colors.content.muted');
+  }
+
+  .ds-badge-brand {
+    @apply ds-badge border-transparent text-white;
+    background: rgba(168, 85, 247, 0.16);
+  }
+
+  /* ---------- Segmented control (tabs / scope / view toggles) ---------- */
+  .ds-segment {
+    @apply inline-flex rounded-md border p-0.5;
+    border-color: theme('colors.line.DEFAULT');
+    background: theme('colors.surface.DEFAULT');
+  }
+  .ds-segment-item {
+    @apply rounded-[7px] px-2.5 py-1.5 text-label font-medium transition-colors;
+    color: theme('colors.content.subtle');
+  }
+  .ds-segment-item:hover:not([aria-pressed='true']):not(:disabled) {
+    color: theme('colors.content.muted');
+  }
+  .ds-segment-item[aria-pressed='true'] {
+    @apply bg-brand-gradient text-white shadow-cta;
+  }
+  .ds-segment-item:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  /* ---------- Icon button (header / utility) ---------- */
+  .ds-icon-btn {
+    @apply inline-flex items-center justify-center rounded-md p-2 text-content-subtle transition-colors;
+  }
+  .ds-icon-btn:hover:not(:disabled) {
+    @apply bg-surface-overlay text-content;
+  }
+  .ds-icon-btn:disabled {
+    @apply cursor-not-allowed opacity-30;
+  }
+
+  /* ---------- Focus ring helper (keyboard) ---------- */
+  .ds-focus {
+    @apply outline-none focus-visible:ring-2;
+    --tw-ring-color: rgba(168, 85, 247, 0.45);
   }
 }

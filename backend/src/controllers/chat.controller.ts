@@ -97,7 +97,7 @@ export const chatController = {
     }
 
     const result = await geminiService.generateText({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash',
       prompt: {
         system:
           system ?? promptBuilderService.chatSystem(mode, normalizeLanguageId(language)),
@@ -105,7 +105,7 @@ export const chatController = {
       },
       config: {
         temperature: temperature ?? 0.32,
-        maxOutputTokens: maxOutputTokens ?? (mode === 'deep' ? 1200 : 900),
+        maxOutputTokens: maxOutputTokens ?? (mode === 'deep' ? 2000 : 1500),
       },
     });
 

@@ -53,15 +53,16 @@ export function generateSparseVector(text: string): {
     termCounts.set(token, (termCounts.get(token) ?? 0) + 1);
   }
 
-  const indices: number[] = [];
-  const values: number[] = [];
-
+  const aggregated = new Map<number, number>();
   for (const [token, count] of termCounts) {
-    indices.push(hashToken(token));
+    const idx = hashToken(token);
     const tf = 1 + Math.log(count);
     const weight = Math.min(tf, 10);
-    values.push(weight);
+    aggregated.set(idx, (aggregated.get(idx) ?? 0) + weight);
   }
+
+  const indices = Array.from(aggregated.keys());
+  const values = Array.from(aggregated.values());
 
   return { indices, values };
 }
@@ -79,13 +80,14 @@ export function generateQuerySparseVector(query: string): {
     return { indices: [], values: [] };
   }
 
-  const indices: number[] = [];
-  const values: number[] = [];
-
+  const aggregated = new Map<number, number>();
   for (const token of tokens) {
-    indices.push(hashToken(token));
-    values.push(1.0);
+    const idx = hashToken(token);
+    aggregated.set(idx, (aggregated.get(idx) ?? 0) + 1.0);
   }
+
+  const indices = Array.from(aggregated.keys());
+  const values = Array.from(aggregated.values());
 
   return { indices, values };
 }

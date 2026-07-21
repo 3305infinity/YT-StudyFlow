@@ -76,7 +76,7 @@ async function translateBatch(
     .join('\n');
 
   const result = await geminiService.generateText({
-    model: 'gemini-2.5-flash-lite',
+    model: 'gemini-3.5-flash',
     prompt: { system, user },
     config: { temperature: 0.05, maxOutputTokens: 8192 },
   });

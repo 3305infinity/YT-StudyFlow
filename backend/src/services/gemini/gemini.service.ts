@@ -42,11 +42,11 @@ export const geminiService = {
       maxOutputTokens: input.config?.maxOutputTokens ?? 1200,
     });
     const result = await geminiPost(`/models/${encodeURIComponent(model)}:generateContent`, {
-      systemInstruction: input.prompt.system
+      system_instruction: input.prompt.system
         ? { parts: [{ text: input.prompt.system }] }
         : undefined,
       contents: [{ role: 'user', parts: [{ text: input.prompt.user }] }],
-      generationConfig: {
+      generation_config: {
         temperature: input.config?.temperature ?? 0.3,
         maxOutputTokens: input.config?.maxOutputTokens ?? 1200,
       },
@@ -111,7 +111,7 @@ export const geminiService = {
       const model = GEMINI_DEFAULTS.textModel;
       const result = await geminiPost(`/models/${encodeURIComponent(model)}:generateContent`, {
         contents: [{ role: 'user', parts: [{ text: 'test' }] }],
-        generationConfig: { maxOutputTokens: 1 },
+        generation_config: { maxOutputTokens: 1 },
       });
       assertOkResponse(result);
       return { status: 'healthy', latencyMs: Date.now() - start };

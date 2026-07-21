@@ -18,8 +18,8 @@ export type ContextPackingConfig = {
 };
 
 const DEFAULT_CONFIG: Required<ContextPackingConfig> = {
-  maxTokens: 6000,
-  maxGapSeconds: 5,
+  maxTokens: 10_000,
+  maxGapSeconds: 3,
 };
 
 function estimateTokens(text: string): number {

@@ -1,5 +1,6 @@
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 export interface TabItem<T extends string = string> {
   id: T;
@@ -21,22 +22,49 @@ export function Tabs<T extends string>({
   onChange,
   className,
 }: TabsProps<T>) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicator, setIndicator] = useState<{ left: number; width: number }>({
+    left: 0,
+    width: 0,
+  });
+
+  useLayoutEffect(() => {
+    const btn = btnRefs.current[value];
+    const list = listRef.current;
+    if (!btn || !list) return;
+    const bRect = btn.getBoundingClientRect();
+    const lRect = list.getBoundingClientRect();
+    setIndicator({ left: bRect.left - lRect.left, width: bRect.width });
+  }, [value, items]);
+
   return (
     <div
+      ref={listRef}
       className={twMerge(
         clsx(
-          'flex gap-0.5 overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900/50 p-0.5',
+          'relative flex gap-1 overflow-x-auto rounded-md border border-line bg-surface p-1',
           '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
         ),
         className
       )}
       role="tablist"
     >
+      {/* Animated active indicator (brand gradient pill). */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1 bottom-1 rounded-[7px] bg-brand-gradient shadow-cta transition-all duration-170 ease-out"
+        style={{ left: indicator.left, width: indicator.width }}
+      />
+
       {items.map((item) => {
         const active = item.id === value;
         return (
           <button
             key={item.id}
+            ref={(el) => {
+              btnRefs.current[item.id] = el;
+            }}
             type="button"
             role="tab"
             aria-selected={active}
@@ -46,16 +74,20 @@ export function Tabs<T extends string>({
             }}
             className={twMerge(
               clsx(
-                'relative shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40',
-                active ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300',
-                item.disabled && 'opacity-40 cursor-not-allowed'
+                'relative z-10 shrink-0 rounded-[7px] px-3 py-1.5 text-label font-medium transition-colors duration-170 ease-out',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/45',
+                active
+                  ? 'text-white'
+                  : 'text-content-subtle hover:text-content-muted',
+                item.disabled && 'cursor-not-allowed opacity-40'
               )
             )}
           >
             {item.label}
             {item.badge && (
-              <span className="ml-1 rounded bg-neutral-700 px-1 py-0.5 text-[9px]">{item.badge}</span>
+              <span className="ml-1 rounded bg-black/20 px-1 py-0.5 text-[9px] text-white/80">
+                {item.badge}
+              </span>
             )}
           </button>
         );

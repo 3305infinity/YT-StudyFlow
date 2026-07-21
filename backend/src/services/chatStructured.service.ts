@@ -2,7 +2,7 @@ import type { ResponseLanguageId } from '../lib/languages.js';
 import { normalizeLanguageId } from '../lib/languages.js';
 import { geminiService } from './gemini.service.js';
 import { ragService, type ScoredChunkResult } from './rag.service.js';
-import { promptBuilderService } from './promptBuilder.service.js';
+import { promptBuilderService, detectIntent } from './promptBuilder.service.js';
 import { citationService, type Citation } from './citation.service.js';
 import { contextPackingService, type PackedContext } from './contextPacking.service.js';
 import { analyzeRetrieval } from './rag/coverage.js';
@@ -74,6 +74,55 @@ type ParsedModelJson = {
   suggestedRelatedTopics: string[];
 };
 
+function sentenceCount(text: string): number {
+  return text.split(/[.!?]+/).filter((s) => s.trim().length > 0).length;
+}
+
+function validateParsedResponse(parsed: ParsedModelJson): { valid: boolean; reason?: string } {
+  if (sentenceCount(parsed.lectureContent) < 3) {
+    return { valid: false, reason: 'lectureContent too short' };
+  }
+  if (parsed.keyTakeaways.length < 3) {
+    return { valid: false, reason: 'keyTakeaways fewer than 3' };
+  }
+  if (!parsed.additionalExplanation.trim()) {
+    return { valid: false, reason: 'additionalExplanation empty' };
+  }
+  if (!parsed.generalKnowledge.trim()) {
+    return { valid: false, reason: 'generalKnowledge empty' };
+  }
+  return { valid: true };
+}
+
+function buildRepairPrompt(
+  system: string,
+  user: string,
+  invalidReason: string,
+  rawResponse: string
+): { system: string; user: string } {
+  const repairSystem = [
+    system,
+    'REPAIR REQUIRED: Your previous response was rejected because: ' + invalidReason,
+    'You must regenerate the JSON response following ALL field requirements exactly.',
+    'Every field must be populated. Never leave a field empty.',
+  ].join('\n\n');
+
+  const repairUser = [
+    user,
+    '',
+    'Your previous response was:',
+    rawResponse.slice(0, 2000),
+    '',
+    'REPAIR INSTRUCTIONS:',
+    '- Ensure lectureContent has at least 3 complete sentences.',
+    '- Ensure keyTakeaways has exactly 3-5 items.',
+    '- Ensure additionalExplanation and generalKnowledge are both non-empty.',
+    '- Return ONLY valid JSON. No markdown fences.',
+  ].join('\n');
+
+  return { system: repairSystem, user: repairUser };
+}
+
 function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJson {
   const trimmed = raw.trim();
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
@@ -94,7 +143,7 @@ function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJs
       parsed.generalKnowledge ?? (coverage === 'none' ? legacyExplanation : '')
     ).trim();
 
-    return {
+    const result = {
       summary: String(parsed.summary ?? '').trim(),
       lectureContent,
       additionalExplanation,
@@ -110,6 +159,17 @@ function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJs
           ? parsed.relatedTopics.map(String).filter(Boolean)
           : [],
     };
+
+    ragDevLog('structured-parse-success', {
+      coverage,
+      summaryLength: result.summary.length,
+      lectureContentLength: result.lectureContent.length,
+      additionalExplanationLength: result.additionalExplanation.length,
+      generalKnowledgeLength: result.generalKnowledge.length,
+      keyTakeaways: result.keyTakeaways.length,
+    });
+
+    return result;
   } catch {
     ragDevLog('structured-parse-failed', {
       coverage,
@@ -147,7 +207,7 @@ export const chatStructuredService = {
 
     return requestDeduplicator.execute(dedupeKey, async () => {
       const language = normalizeLanguageId(params.language);
-      const topK = params.topK ?? 14;
+      const topK = params.topK ?? 20;
 
       const retrieved: ScoredChunkResult[] = await ragService.retrieve({
         userId: params.userId,
@@ -191,6 +251,7 @@ export const chatStructuredService = {
         videoId: params.videoId,
         context,
         lectureRelatedTopics,
+        intent: detectIntent(params.question),
       });
       const promptLatencyMs = Date.now() - promptStart;
 
@@ -205,20 +266,20 @@ export const chatStructuredService = {
 
 const geminiStarted = Date.now();
       ragDevLog('gemini-request', {
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3.5-flash',
         mode: params.mode ?? 'concise',
         temperature: 0.28,
-        maxOutputTokens: params.mode === 'deep' ? 1400 : 1000,
+        maxOutputTokens: params.mode === 'deep' ? 2000 : 1500,
       });
       let result;
       try {
         result = await withTimeout(
           geminiService.generateText({
-            model: 'gemini-2.5-flash-lite',
+            model: 'gemini-3.5-flash',
             prompt: { system, user },
             config: {
               temperature: 0.28,
-              maxOutputTokens: params.mode === 'deep' ? 1400 : 1000,
+              maxOutputTokens: params.mode === 'deep' ? 2000 : 1500,
             },
           }),
           { timeoutMs: 15000, serviceName: 'gemini' }
@@ -236,14 +297,41 @@ const geminiStarted = Date.now();
         contentLength: result.content.length,
       });
 
-      const parsed = parseStructuredJson(result.content, analysis.coverage);
-      ragDevLog('structured-parse-success', {
-        summaryLength: parsed.summary.length,
-        lectureContentLength: parsed.lectureContent.length,
-        additionalExplanationLength: parsed.additionalExplanation.length,
-        generalKnowledgeLength: parsed.generalKnowledge.length,
-        keyTakeaways: parsed.keyTakeaways.length,
-      });
+      let parsed = parseStructuredJson(result.content, analysis.coverage);
+
+      if (params.mode !== 'concise') {
+        const validation = validateParsedResponse(parsed);
+        if (!validation.valid) {
+          ragDevLog('structured-repair-attempt', { reason: validation.reason });
+          try {
+            const repair = buildRepairPrompt(
+              system,
+              user,
+              validation.reason ?? 'response incomplete',
+              result.content
+            );
+            const repairResult = await withTimeout(
+              geminiService.generateText({
+                model: 'gemini-3.5-flash',
+                prompt: repair,
+                config: {
+                  temperature: 0.28,
+                  maxOutputTokens: params.mode === 'deep' ? 2000 : 1500,
+                },
+              }),
+              { timeoutMs: 15000, serviceName: 'gemini-repair' }
+            );
+            parsed = parseStructuredJson(repairResult.content, analysis.coverage);
+            ragDevLog('structured-repair-success', {
+              lectureContentLength: parsed.lectureContent.length,
+              keyTakeaways: parsed.keyTakeaways.length,
+            });
+          } catch (repairError) {
+            ragDevLog('structured-repair-failed', { error: String(repairError) });
+          }
+        }
+      }
+
       const citations = citationService.buildCitations(
         retrieved.map((r) => ({ chunk: r.chunk, score: r.score }))
       );

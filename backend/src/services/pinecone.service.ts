@@ -1,10 +1,8 @@
-import { Pinecone, type RecordSparseValues } from '@pinecone-database/pinecone';
+import { Pinecone } from '@pinecone-database/pinecone';
 
 import { env } from '../config/env.js';
 
 import { withRetry } from '../utils/retry.js';
-
-import { generateQuerySparseVector, generateSparseVector } from '../utils/sparseEncoding.js';
 
 
 let client: Pinecone | null = null;
@@ -119,53 +117,25 @@ export const pineconeService = {
       await index.namespace(namespace).upsert(
 
         params.chunks.map((c) => {
-
-          const sparseValues = generateSparseVector(c.text);
-
           const record: {
-
             id: string;
-
             values: number[];
-
-            sparseValues?: RecordSparseValues;
-
             metadata: Record<string, string | number | string[]>;
-
           } = {
-
             id: c.id,
-
             values: c.embedding,
-
             metadata: {
-
               text: c.text.slice(0, 1000),
-
               title: (c.title ?? c.videoTitle ?? '').slice(0, 200),
-
               startTime: c.startTime,
-
               endTime: c.endTime,
-
               videoId: c.videoId,
-
               videoTitle: c.videoTitle ?? '',
-
               playlistId: c.playlistId ?? '',
-
             },
-
           };
 
-          if (sparseValues.indices.length > 0) {
-
-            record.sparseValues = sparseValues;
-
-          }
-
           return record;
-
         })
 
       );
@@ -199,8 +169,6 @@ export const pineconeService = {
 
       const namespace = pineconeNamespace(params.userId, params.videoId);
 
-      const sparseVector = params.queryText ? generateQuerySparseVector(params.queryText) : undefined;
-
       const result = await index.namespace(namespace).query({
 
         vector: params.queryEmbedding,
@@ -212,8 +180,6 @@ export const pineconeService = {
         includeValues: true,
 
         filter: buildMetadataFilter(params.filter),
-
-        sparseVector: sparseVector?.indices.length ? sparseVector : undefined,
 
       });
 
