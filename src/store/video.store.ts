@@ -16,37 +16,43 @@ interface VideoState {
   reset: () => void;
 }
 
-export const useVideoStore = create<VideoState>((set) => ({
+export const useVideoStore = create<VideoState>((set, get) => ({
   videoId: null,
   title: null,
   channel: null,
   duration: 0,
   currentTime: 0,
 
-  setVideo: (videoId) =>
-    set({
-      videoId,
-      title: null,
-      channel: null,
-      duration: 0,
-      currentTime: 0,
-    }),
+  setVideo: (videoId) => {
+    set({ videoId });
+  },
 
-  setMetadata: (meta) =>
-    set((state) => ({
-      title: meta.title ?? state.title,
-      channel: meta.channel ?? state.channel,
-      duration: meta.duration ?? state.duration,
-    })),
+  setMetadata: (meta) => {
+    const prev = get();
+    const next = {
+      title: meta.title ?? prev.title,
+      channel: meta.channel ?? prev.channel,
+      duration: meta.duration ?? prev.duration,
+    };
+    if (
+      next.title === prev.title &&
+      next.channel === prev.channel &&
+      next.duration === prev.duration
+    ) {
+      return;
+    }
+    set(next);
+  },
 
   setCurrentTime: (time) => set({ currentTime: time }),
 
-  reset: () =>
+  reset: () => {
     set({
       videoId: null,
       title: null,
       channel: null,
       duration: 0,
       currentTime: 0,
-    }),
+    });
+  },
 }));

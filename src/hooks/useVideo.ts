@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import {
   getChannelNameFromPage,
+  getCurrentVideoId,
   getVideoDurationFromPlayer,
   getVideoTitleFromPage,
 } from '@lib/youtube';
@@ -18,11 +19,42 @@ export function useVideo(videoId: string) {
   const loadVideo = useCallback(async () => {
     if (!videoId) return;
 
+    const currentId = getCurrentVideoId();
+    if (currentId !== videoId) return;
+
     const title = getVideoTitleFromPage();
     const channel = getChannelNameFromPage();
     const duration = getVideoDurationFromPlayer();
 
+    const currentIdAfter = getCurrentVideoId();
+    if (currentIdAfter !== videoId) return;
+
+    if (useVideoStore.getState().videoId !== videoId) return;
+
     setMetadata({ title, channel, duration });
+
+    if (title != null && channel != null && duration > 0) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      if (pollCapRef.current) {
+        clearTimeout(pollCapRef.current);
+        pollCapRef.current = null;
+      }
+      if (t1Ref.current) {
+        clearTimeout(t1Ref.current);
+        t1Ref.current = null;
+      }
+      if (t2Ref.current) {
+        clearTimeout(t2Ref.current);
+        t2Ref.current = null;
+      }
+      if (t3Ref.current) {
+        clearTimeout(t3Ref.current);
+        t3Ref.current = null;
+      }
+    }
   }, [videoId, setMetadata]);
 
   useEffect(() => {
@@ -30,18 +62,18 @@ export function useVideo(videoId: string) {
       const detail = (e as CustomEvent<{ currentTime: number; videoId: string; duration?: number }>)
         .detail;
       if (!detail || detail.videoId !== videoId) return;
+
       setCurrentTime(detail.currentTime);
-      if (detail.duration && detail.duration > 0) {
-        const state = useVideoStore.getState();
-        setMetadata({ title: state.title, channel: state.channel, duration: detail.duration });
-      }
     };
 
     const onDuration = (e: Event) => {
       const detail = (e as CustomEvent<{ duration: number; videoId: string }>).detail;
       if (!detail || detail.videoId !== videoId || !(detail.duration > 0)) return;
-      const state = useVideoStore.getState();
-      setMetadata({ title: state.title, channel: state.channel, duration: detail.duration });
+
+      const currentId = getCurrentVideoId();
+      if (currentId !== videoId) return;
+
+      setMetadata({ duration: detail.duration });
     };
 
     const onAdEnded = (e: Event) => {
@@ -61,33 +93,35 @@ export function useVideo(videoId: string) {
   }, [videoId, setCurrentTime, setMetadata, loadVideo]);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const t1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const t2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const t3Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    void loadVideo();
-    const t1 = setTimeout(() => void loadVideo(), 1500);
-    const t2 = setTimeout(() => void loadVideo(), 5000);
+    t1Ref.current = setTimeout(() => void loadVideo(), 800);
+    t2Ref.current = setTimeout(() => void loadVideo(), 2000);
+    t3Ref.current = setTimeout(() => void loadVideo(), 5000);
 
     pollRef.current = setInterval(() => {
-      const d = getVideoDurationFromPlayer();
-      if (d > 0) {
-        const state = useVideoStore.getState();
-        setMetadata({ title: state.title, channel: state.channel, duration: d });
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    }, 500);
+      void loadVideo();
+    }, 3000);
 
-    const pollCap = setTimeout(() => {
+    pollCapRef.current = setTimeout(() => {
       if (pollRef.current) clearInterval(pollRef.current);
-    }, 60_000);
+      pollRef.current = null;
+    }, 45_000);
 
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      if (t1Ref.current) clearTimeout(t1Ref.current);
+      if (t2Ref.current) clearTimeout(t2Ref.current);
+      if (t3Ref.current) clearTimeout(t3Ref.current);
       if (pollRef.current) clearInterval(pollRef.current);
-      clearTimeout(pollCap);
+      pollRef.current = null;
+      if (pollCapRef.current) clearTimeout(pollCapRef.current);
+      pollCapRef.current = null;
     };
-  }, [loadVideo, setMetadata]);
+  }, [loadVideo]);
 
   return { loadVideo };
 }

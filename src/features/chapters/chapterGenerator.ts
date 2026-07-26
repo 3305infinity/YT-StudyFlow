@@ -6,6 +6,7 @@ import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildChaptersPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localChapters } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
+import { getCurrentVideoId } from '@lib/youtube';
 
 function hasDevanagari(text: string): boolean {
   return /[\u0900-\u097F]/.test(text);
@@ -30,6 +31,8 @@ export async function generateChaptersForVideo(params: {
   videoTitle?: string;
   maxChapters?: number;
 }): Promise<Chapter[]> {
+  const capturedVideoId = params.videoId;
+  const stale = () => getCurrentVideoId() !== capturedVideoId;
   const maxChapters = params.maxChapters ?? 8;
   const relevant = await retrieveRelevantChunks(
     'chapter structure topics sections',
@@ -37,6 +40,7 @@ export async function generateChaptersForVideo(params: {
     VECTOR_SEARCH.TOP_K + 4,
     0
   );
+  if (stale()) throw new Error('Video changed during chapter generation');
   const context = (relevant.length ? relevant : params.semanticChunks)
     .map((c) => `[${Math.floor(c.startTime)}s-${Math.floor(c.endTime)}s] ${c.text}`)
     .join('\n\n');
@@ -49,6 +53,7 @@ export async function generateChaptersForVideo(params: {
   try {
     const gemini = await createGeminiService();
     const settings = await getSettings();
+    if (stale()) throw new Error('Video changed during chapter generation');
     const { system, user } = buildChaptersPrompt({
       videoTitle: params.videoTitle,
       maxChapters,
@@ -62,10 +67,13 @@ export async function generateChaptersForVideo(params: {
       config: { temperature: 0.3, maxOutputTokens: 1200 },
     });
 
+    if (stale()) throw new Error('Video changed during chapter generation');
+
     const parsed = parseJson<{ chapters: Chapter[] }>(resp.content);
     chapters = englishifyChapters(parsed?.chapters ?? []);
   } catch (e) {
     console.warn('[YT StudyFlow] Gemini chapters failed — using local', e);
+    if (stale()) throw new Error('Video changed during chapter generation');
     chapters = localChapters(params.semanticChunks, maxChapters);
   }
   }
@@ -86,11 +94,14 @@ export async function generateChaptersForVideo(params: {
     }))
     .sort((a, b) => a.startTime - b.startTime);
 
+  if (stale()) throw new Error('Video changed before persisting chapters');
+
   const ts = nowMs();
   await ensureDbReady();
+  if (stale()) throw new Error('Video changed before persisting chapters');
   await getDb().chapters.put({
-    id: DbIds.chapters(params.videoId),
-    videoId: params.videoId,
+    id: DbIds.chapters(capturedVideoId),
+    videoId: capturedVideoId,
     title: params.videoTitle ?? 'Chapters',
     chapters,
     createdAt: ts,

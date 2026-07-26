@@ -1,11 +1,12 @@
 /**
  * Sidebar injection via Shadow DOM on the YouTube page.
  *
- * Why Shadow DOM (not iframe):
- * - Same window as the page → postMessage transcript transport works
- * - Same window → player events + seek work without bridges
- * - Clicks/focus work reliably (iframe sandbox caused broken UI)
- * - Tailwind styles isolated from YouTube CSS
+ * Real collapsible drawer:
+ * - Expanded: 420px
+ * - Collapsed: 56px vertical pill
+ * - 300ms width transition
+ * - React tree never destroyed
+ * - Never uses display:none or visibility:hidden
  */
 
 import React from 'react';
@@ -24,6 +25,41 @@ const ROOT_ID = 'yt-studyflow-root';
 
 let reactRoot: ReactDOM.Root | null = null;
 let activeVideoId: string | null = null;
+let escHandler: ((e: KeyboardEvent) => void) | null = null;
+let sidebarCollapsed = false;
+
+function getHost(): HTMLElement | null {
+  return document.getElementById(HOST_ID);
+}
+
+function getOrCreateHost(): HTMLElement {
+  let host = document.getElementById(HOST_ID);
+  if (host) return host as HTMLElement;
+
+  host = document.createElement('div');
+  host.id = HOST_ID;
+  host.style.cssText = `
+    position: fixed;
+    top: 50%;
+    right: 0;
+    width: ${UI.SIDEBAR_WIDTH}px;
+    height: 100vh;
+    z-index: 2147483646;
+    border: none;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(180deg, #0a0f1a 0%, #0b1220 40%, #0d1528 100%);
+    pointer-events: auto;
+    transform: translateY(-50%);
+    transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 300ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  `;
+
+  document.body.appendChild(host);
+  installSidebarKeyboardIsolation();
+  return host;
+}
 
 function buildShadowRoot(host: HTMLElement): HTMLElement {
   const shadow = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
@@ -69,6 +105,8 @@ function buildShadowRoot(host: HTMLElement): HTMLElement {
 
   const container = document.createElement('div');
   container.id = ROOT_ID;
+  container.style.width = '100%';
+  container.style.height = '100%';
   shadow.appendChild(container);
   return container;
 }
@@ -77,7 +115,35 @@ function adjustYouTubeLayout(show: boolean): void {
   const app = document.querySelector('ytd-app');
   if (!(app instanceof HTMLElement)) return;
   app.style.marginRight = show ? `${UI.SIDEBAR_WIDTH}px` : '0';
-  app.style.transition = `margin-right ${UI.ANIMATION_MS}ms ease`;
+  app.style.transition = `margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1)`;
+}
+
+export function collapseSidebar(): void {
+  const host = getHost();
+  if (!host || sidebarCollapsed) return;
+  host.style.width = '56px';
+  host.style.borderRadius = '16px 0 0 16px';
+  host.style.boxShadow = '-4px 0 24px rgba(0,0,0,0.5)';
+  adjustYouTubeLayout(false);
+  sidebarCollapsed = true;
+}
+
+export function expandSidebar(): void {
+  const host = getHost();
+  if (!host || !sidebarCollapsed) return;
+  host.style.width = `${UI.SIDEBAR_WIDTH}px`;
+  host.style.borderRadius = '0';
+  host.style.boxShadow = 'none';
+  adjustYouTubeLayout(true);
+  sidebarCollapsed = false;
+}
+
+export function toggleSidebar(): void {
+  if (sidebarCollapsed) {
+    expandSidebar();
+  } else {
+    collapseSidebar();
+  }
 }
 
 class SidebarErrorBoundary extends React.Component<
@@ -104,60 +170,68 @@ class SidebarErrorBoundary extends React.Component<
 }
 
 export function injectSidebar(videoId: string): void {
-  const existing = document.getElementById(HOST_ID);
-  if (activeVideoId === videoId && existing && reactRoot) {
-    return;
+  const allHosts = document.querySelectorAll('#yt-studyflow-host');
+  if (allHosts.length > 1) {
+    allHosts.forEach((h, i) => { if (i > 0) (h as HTMLElement).remove(); });
   }
 
-  removeSidebar();
-  activeVideoId = videoId;
+  const existingHost = getHost();
+  const container = buildShadowRoot(existingHost || getOrCreateHost());
 
-  const host = document.createElement('div');
-  host.id = HOST_ID;
-  host.style.cssText = `
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: ${UI.SIDEBAR_WIDTH}px;
-    height: 100vh;
-    z-index: 2147483646;
-    border: none;
-    margin: 0;
-    padding: 0;
-    background: linear-gradient(180deg, #0a0f1a 0%, #0b1220 40%, #0d1528 100%);
-    pointer-events: auto;
-    isolation: isolate;
-  `;
+  if (!reactRoot) {
+    reactRoot = ReactDOM.createRoot(container);
+  }
 
-  document.body.appendChild(host);
-  installSidebarKeyboardIsolation();
+  if (activeVideoId !== videoId) {
+    activeVideoId = videoId;
+    reactRoot.render(
+      React.createElement(SidebarErrorBoundary, null,
+        React.createElement(
+          'div',
+          {
+            style: {
+              width: '100%',
+              height: '100%',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'row',
+            },
+          },
+          React.createElement(
+            'div',
+            {
+              style: {
+                width: '100%',
+                flexShrink: 0,
+                height: '100%',
+              },
+            },
+            React.createElement(Sidebar, { videoId })
+          )
+        )
+      )
+    );
+  }
 
-  const container = buildShadowRoot(host);
-  reactRoot = ReactDOM.createRoot(container);
-  reactRoot.render(
-    React.createElement(
-      SidebarErrorBoundary,
-      null,
-      React.createElement(Sidebar, { videoId })
-    )
-  );
-
-  requestAnimationFrame(() => adjustYouTubeLayout(true));
+  if (!escHandler) {
+    escHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        collapseSidebar();
+      }
+    };
+    window.addEventListener('keydown', escHandler);
+  }
 }
 
 export function removeSidebar(): void {
+  if (escHandler) {
+    window.removeEventListener('keydown', escHandler);
+    escHandler = null;
+  }
   reactRoot?.unmount();
   reactRoot = null;
+  activeVideoId = null;
   removeSidebarKeyboardIsolation();
   document.getElementById(HOST_ID)?.remove();
-  activeVideoId = null;
   adjustYouTubeLayout(false);
-}
-
-export function toggleSidebar(): void {
-  const host = document.getElementById(HOST_ID);
-  if (!host) return;
-  const hidden = host.style.display === 'none';
-  host.style.display = hidden ? 'block' : 'none';
-  adjustYouTubeLayout(hidden);
 }

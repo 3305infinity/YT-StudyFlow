@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState, memo } from 'react';
 import { FileText, Settings, X, GraduationCap } from 'lucide-react';
 
 import { TranscriptPanel } from '@/features/transcript/TranscriptPanel';
@@ -10,15 +10,17 @@ import { ExportPanel } from '@/features/export/ExportPanel';
 import { SettingsPanel } from '@/pages/Settings';
 import { Tabs } from '@/components/Tabs';
 import { LanguageSelector } from '@/components/LanguageSelector';
-import { seekTo, formatTime } from '@lib/youtube';
+import { seekTo } from '@lib/youtube';
 import { watchUrlFor } from '@lib/playlist';
 import { usePlaylistStore } from '@/store/playlist.store';
 import { useVideoStore } from '@store/video.store';
 import { useUiStore, type WorkspaceTab } from '@store/ui.store';
 import { useRagPipeline } from '@/hooks/useRagPipeline';
-import { useAuthStore } from '@/store/auth.store';
-import { useRagStore } from '@/store/rag.store';
-import { useSettingsStore } from '@/store/settings.store';
+import { useAuthStore } from '@store/auth.store';
+import { useRagStore } from '@store/rag.store';
+import { useSettingsStore } from '@store/settings.store';
+import { collapseSidebar, expandSidebar } from '@/content/injectSidebar';
+import { MemoizedProgressBar } from './ProgressBar';
 
 const WORKSPACE_TABS: Array<{ id: WorkspaceTab; label: string }> = [
   { id: 'chat', label: 'Chat' },
@@ -27,6 +29,14 @@ const WORKSPACE_TABS: Array<{ id: WorkspaceTab; label: string }> = [
   { id: 'analytics', label: 'Analytics' },
 ];
 
+const MemoizedChatPanel = memo(ChatPanel);
+const MemoizedNotesPanel = memo(NotesPanel);
+const MemoizedRevisionPanel = memo(RevisionPanel);
+const MemoizedAnalyticsPanel = memo(AnalyticsPanel);
+const MemoizedTranscriptPanel = memo(TranscriptPanel);
+const MemoizedSettingsPanel = memo(SettingsPanel);
+const MemoizedExportPanel = memo(ExportPanel);
+
 export function SidebarLayout({
   videoId,
   onReloadTranscript,
@@ -34,7 +44,9 @@ export function SidebarLayout({
   videoId: string;
   onReloadTranscript?: () => void;
 }) {
-  const { title, channel, currentTime, duration } = useVideoStore();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const title = useVideoStore((s) => s.title);
+  const channel = useVideoStore((s) => s.channel);
   const { activeTab, setActiveTab, utilityPanel, closeUtility } = useUiStore();
   const ragStage = useRagStore((s) => s.stage);
   const ragStatus = useRagStore((s) => s.status);
@@ -46,6 +58,16 @@ export function SidebarLayout({
     void loadAuth();
     void loadSettings();
   }, [loadAuth, loadSettings]);
+
+  const toggleDrawer = () => {
+    if (isCollapsed) {
+      expandSidebar();
+      setIsCollapsed(false);
+    } else {
+      collapseSidebar();
+      setIsCollapsed(true);
+    }
+  };
 
   const onJumpToTime = useMemo(
     () => (seconds: number, citeVideoId?: string) => {
@@ -59,8 +81,36 @@ export function SidebarLayout({
     [videoId]
   );
 
-  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const stableOnReloadTranscript = useMemo(
+    () => onReloadTranscript ?? (() => {}),
+    [onReloadTranscript]
+  );
+
   const isUtility = Boolean(utilityPanel);
+
+  if (isCollapsed) {
+    return (
+      <div
+        className="flex h-full items-center justify-center"
+        style={{
+          width: '56px',
+          borderRadius: '16px 0 0 16px',
+          boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
+          cursor: 'pointer',
+        }}
+        onClick={toggleDrawer}
+        title="Open StudyFlow"
+      >
+        <div
+          className="flex h-9 w-9 items-center justify-center rounded-xl"
+          style={{ background: 'linear-gradient(135deg, #a855f7 0%, #c026d3 50%, #ec4899 100%)' }}
+          aria-hidden
+        >
+          <GraduationCap className="h-5 w-5 text-white" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-base text-content">
@@ -79,6 +129,14 @@ export function SidebarLayout({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <LanguageSelector />
+          <button
+            type="button"
+            onClick={toggleDrawer}
+            aria-label="Collapse sidebar"
+            className="ds-icon-btn"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <button
             type="button"
             onClick={() => setActiveTab('transcript')}
@@ -108,16 +166,7 @@ export function SidebarLayout({
         )}
 
         <div className="mt-3">
-          <div className="mb-1.5 flex justify-between font-mono text-[10px] text-content-subtle">
-            <span>{formatTime(currentTime)}</span>
-            <span>{duration > 0 ? formatTime(duration) : '--:--'}</span>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-surface-overlay">
-            <div
-              className="h-full rounded-full bg-brand-gradient transition-[width] duration-200"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+          <MemoizedProgressBar />
         </div>
 
         {ragStatus === 'building' && ragStage && (
@@ -136,11 +185,13 @@ export function SidebarLayout({
 
       {/* ---------- Active panel ---------- */}
       <main className="min-h-0 flex-1">
-        {activeTab === 'chat' && <ChatPanel onJumpToTime={onJumpToTime} />}
-        {activeTab === 'notes' && <NotesPanel videoId={videoId} />}
-        {activeTab === 'revision' && <RevisionPanel videoId={videoId} onJumpToTime={onJumpToTime} />}
+        {activeTab === 'chat' && <MemoizedChatPanel onJumpToTime={onJumpToTime} />}
+        {activeTab === 'notes' && <MemoizedNotesPanel videoId={videoId} />}
+        {activeTab === 'revision' && (
+          <MemoizedRevisionPanel videoId={videoId} onJumpToTime={onJumpToTime} />
+        )}
         {activeTab === 'analytics' && (
-          <AnalyticsPanel videoId={videoId} duration={duration} onJumpToTime={onJumpToTime} />
+          <MemoizedAnalyticsPanel videoId={videoId} onJumpToTime={onJumpToTime} />
         )}
       </main>
 
@@ -150,7 +201,13 @@ export function SidebarLayout({
           className="absolute inset-0 z-20 flex flex-col bg-base"
           role="dialog"
           aria-modal="true"
-          aria-label={utilityPanel === 'transcript' ? 'Transcript' : utilityPanel === 'settings' ? 'Settings' : 'Export'}
+          aria-label={
+            utilityPanel === 'transcript'
+              ? 'Transcript'
+              : utilityPanel === 'settings'
+                ? 'Settings'
+                : 'Export'
+          }
         >
           <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
             <p className="text-body font-medium capitalize text-content">{utilityPanel}</p>
@@ -165,10 +222,10 @@ export function SidebarLayout({
           </div>
           <div className="min-h-0 flex-1">
             {utilityPanel === 'transcript' && (
-              <TranscriptPanel onJumpToTime={onJumpToTime} onReload={onReloadTranscript} />
+              <MemoizedTranscriptPanel onJumpToTime={onJumpToTime} onReload={stableOnReloadTranscript} />
             )}
-            {utilityPanel === 'settings' && <SettingsPanel />}
-            {utilityPanel === 'export' && <ExportPanel videoId={videoId} />}
+            {utilityPanel === 'settings' && <MemoizedSettingsPanel />}
+            {utilityPanel === 'export' && <MemoizedExportPanel videoId={videoId} />}
           </div>
         </div>
       )}

@@ -146,7 +146,7 @@ export async function fetchFromCapturedCache(baseUrl?: string): Promise<{
 
 
 
-export async function fetchCaptionText(url: string): Promise<{
+export async function fetchCaptionText(url: string, signal?: AbortSignal): Promise<{
 
   ok: boolean;
 
@@ -182,7 +182,7 @@ export async function fetchCaptionText(url: string): Promise<{
 
   try {
 
-    const resp = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' });
+    const resp = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store', signal });
 
     const text = await resp.text();
 
@@ -264,7 +264,7 @@ export async function fetchCaptionText(url: string): Promise<{
 
 
 
-export async function fetchCaptionTextWithFormats(baseUrl: string): Promise<{
+export async function fetchCaptionTextWithFormats(baseUrl: string, signal?: AbortSignal): Promise<{
 
   ok: boolean;
 
@@ -298,7 +298,7 @@ export async function fetchCaptionTextWithFormats(baseUrl: string): Promise<{
 
   for (const url of urls) {
 
-    const result = await fetchCaptionText(url);
+    const result = await fetchCaptionText(url, signal);
 
     if (result.ok && result.text && looksLikeTranscriptPayload(result.text, result.contentType)) {
 

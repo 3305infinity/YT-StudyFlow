@@ -9,6 +9,82 @@ export type ChatMode = 'concise' | 'deep' | 'interview';
 
 export type Intent = 'explain' | 'compare' | 'interview' | 'walkthrough' | 'notes' | 'quiz' | 'exam-review';
 
+export type IntentSchema =
+  | 'explain'
+  | 'compare'
+  | 'interview'
+  | 'walkthrough'
+  | 'notes'
+  | 'quiz'
+  | 'exam-review';
+
+export interface ExplainResponse {
+  concept: string;
+  simpleExplanation: string;
+  example: string;
+  analogy: string;
+}
+
+export interface CompareResponse {
+  comparison: Array<{
+    aspect: string;
+    itemA: string;
+    itemB: string;
+    verdict: string;
+  }>;
+}
+
+export interface InterviewResponse {
+  questions: Array<{
+    question: string;
+    answer: string;
+    followUp: string;
+  }>;
+}
+
+export interface WalkthroughResponse {
+  steps: Array<{
+    step: number;
+    action: string;
+    why: string;
+    pitfall: string;
+  }>;
+}
+
+export interface NotesResponse {
+  sections: Array<{
+    heading: string;
+    bullets: string[];
+  }>;
+}
+
+export interface QuizResponse {
+  questions: Array<{
+    question: string;
+    options: string[];
+    correct: string;
+    explanation: string;
+  }>;
+}
+
+export interface ExamReviewResponse {
+  topics: Array<{
+    topic: string;
+    keyPoints: string[];
+    formula?: string;
+    pitfall: string;
+  }>;
+}
+
+export type IntentResponse =
+  | ExplainResponse
+  | CompareResponse
+  | InterviewResponse
+  | WalkthroughResponse
+  | NotesResponse
+  | QuizResponse
+  | ExamReviewResponse;
+
 export function detectIntent(question: string): Intent {
   const q = question.toLowerCase();
   if (/\b(quiz|mcq|multiple choice|question bank|practice question|test me)\b/.test(q)) return 'quiz';
@@ -20,58 +96,97 @@ export function detectIntent(question: string): Intent {
   return 'explain';
 }
 
-function intentInstructions(intent: Intent): string {
-  switch (intent) {
-    case 'compare':
-      return 'INTENT: COMPARE. Create a structured side-by-side comparison. Cover: (1) what each concept is, (2) how they differ, (3) when to use each, (4) trade-offs. Use labeled comparison sections.';
-    case 'interview':
-      return 'INTENT: INTERVIEW. Act as an interviewer. Provide 5-8 likely exam/interview questions based on the lecture, with detailed model answers. Include follow-up questions that test deeper understanding. Format as Q&A pairs.';
-    case 'walkthrough':
-      return 'INTENT: WALKTHROUGH. Provide a numbered step-by-step guide. Explain what happens at each stage, why it matters, and what to watch out for. Include prerequisites and common pitfalls.';
-    case 'notes':
-      return 'INTENT: NOTES. Create structured study notes. Use clear headings, bullet points, and bold key terms. Make it scannable for quick review. This is the only mode where a summary-style answer is appropriate.';
-    case 'quiz':
-      return 'INTENT: QUIZ. Generate 5-10 multiple-choice questions based on the lecture. Each question must have 4 options (A-D) and the correct answer. Put questions in keyTakeaways as structured strings like "Q: ... | A: ... | Correct: B | Explanation: ...". Use lectureContent for the quiz body.';
-    case 'exam-review':
-      return 'INTENT: EXAM-REVIEW. Create a comprehensive revision checklist. Cover all major concepts, formulas, definitions, and common pitfalls. Organize by topic. Use lectureContent for the main review material and keyTakeaways for the checklist items.';
-    case 'explain':
-    default:
-      return 'INTENT: EXPLAIN. Become a patient teacher. Break the concept into simple parts. Use analogies and real-world examples. Build from simple to complex. Teach intuition, not just facts. The lectureContent must be a full educational explanation — never just a summary.';
-  }
-}
+const INTENT_INSTRUCTIONS: Record<Intent, string> = {
+  explain: 'Teach the concept with a clear definition, simple explanation, concrete example, and analogy.',
+  compare: 'Create a structured comparison covering what each item is, how they differ, when to use each, and the verdict.',
+  interview: 'Generate likely exam/interview questions with detailed model answers and follow-up questions.',
+  walkthrough: 'Provide a numbered step-by-step guide with actions, reasons, and common pitfalls.',
+  notes: 'Create structured study notes with clear headings and bullet points.',
+  quiz: 'Generate multiple-choice questions with 4 options, the correct answer, and explanation.',
+  'exam-review': 'Create a comprehensive revision checklist organized by topic with key points and common pitfalls.',
+};
 
-const MANDATORY_JSON_SCHEMA = [
-  'MANDATORY JSON — every field is required. Empty strings, empty arrays, and one-word values are not allowed.',
-  'If the transcript is thin, use your knowledge to generate complete answers.',
-  'Return ONLY valid JSON. No markdown fences.',
-  '',
-  'Field requirements:',
-  '  summary         — 1-2 sentence overview. Must be a real summary, not a restatement of the question.',
-  '  lectureContent  — the MAIN educational answer. Minimum 3 sentences. Must teach the concept with examples, analogies, or step-by-step reasoning. Never empty, never just a summary.',
-  '  additionalExplanation — REQUIRED. Add background knowledge, real-world analogies, simplified explanations, or worked examples. Minimum 2 sentences.',
-  '  generalKnowledge — REQUIRED. Add standalone factual context, definitions, or broader context the student needs. Minimum 2 sentences.',
-  '  keyTakeaways     — REQUIRED array of 3-5 specific study bullets. Each bullet must be a complete sentence. No generic bullets.',
-  '  suggestedRelatedTopics — REQUIRED array of 2-3 adjacent topics to explore next.',
-  '',
-  'Example shape:',
-  '  {',
-  '    "summary": "This lecture covers X, Y, and Z...",',
-  '    "lectureContent": "Full educational explanation here...",',
-  '    "additionalExplanation": "Background and analogies here...",',
-  '    "generalKnowledge": "Broader factual context here...",',
-  '    "keyTakeaways": ["Specific bullet 1", "Specific bullet 2", "Specific bullet 3"],',
-  '    "suggestedRelatedTopics": ["Topic A", "Topic B"]',
-  '  }',
-].join('\n');
+const INTENT_SCHEMAS: Record<IntentSchema, string> = {
+  explain: `Return JSON:
+{
+  "concept": "concept name",
+  "simpleExplanation": "plain-language explanation",
+  "example": "concrete example from the lecture",
+  "analogy": "real-world analogy"
+}`,
+  compare: `Return JSON:
+{
+  "comparison": [
+    {
+      "aspect": "dimension being compared",
+      "itemA": "how first item relates",
+      "itemB": "how second item relates",
+      "verdict": "which to use when"
+    }
+  ]
+}`,
+  interview: `Return JSON:
+{
+  "questions": [
+    {
+      "question": "likely exam/interview question",
+      "answer": "detailed model answer",
+      "followUp": "follow-up question to test deeper understanding"
+    }
+  ]
+}`,
+  walkthrough: `Return JSON:
+{
+  "steps": [
+    {
+      "step": 1,
+      "action": "what to do",
+      "why": "why this step matters",
+      "pitfall": "what to watch out for"
+    }
+  ]
+}`,
+  notes: `Return JSON:
+{
+  "sections": [
+    {
+      "heading": "topic name",
+      "bullets": ["specific study point", "specific study point"]
+    }
+  ]
+}`,
+  quiz: `Return JSON:
+{
+  "questions": [
+    {
+      "question": "question text",
+      "options": ["A. option", "B. option", "C. option", "D. option"],
+      "correct": "A",
+      "explanation": "why this answer is correct"
+    }
+  ]
+}`,
+  'exam-review': `Return JSON:
+{
+  "topics": [
+    {
+      "topic": "topic name",
+      "keyPoints": ["key point 1", "key point 2"],
+      "formula": "if applicable",
+      "pitfall": "common mistake to avoid"
+    }
+  ]
+}`,
+};
 
 function modeDepth(mode: ChatMode): string {
   if (mode === 'deep') {
-    return 'DEPTH: DEEP. Give a thorough explanation with intuition, examples, and careful technical detail. Use the full output budget.';
+    return 'DEPTH: DEEP. Provide thorough, detailed answers with intuition, examples, and careful technical depth.';
   }
   if (mode === 'interview') {
-    return 'DEPTH: INTERVIEW. Use interview-prep framing when useful, but still teach the underlying concept clearly with complete answers.';
+    return 'DEPTH: INTERVIEW. Frame answers for exam/interview preparation with complete, precise responses.';
   }
-  return 'DEPTH: CONCISE. Be compact but still complete. Prioritize clarity and teaching over brevity. Every field must have real content.';
+  return 'DEPTH: CONCISE. Be compact but complete. Prioritize clarity and teaching over brevity.';
 }
 
 export const promptBuilderService = {
@@ -79,15 +194,9 @@ export const promptBuilderService = {
     return [
       'You are an expert teacher and AI tutor for YouTube lecture content.',
       modeDepth(mode),
-      'Your PRIMARY job is to produce complete educational answers across ALL JSON fields.',
-      'lectureContent is the main answer, but additionalExplanation, generalKnowledge, and keyTakeaways are equally required.',
-      'Use the transcript as the primary source whenever transcript context is provided.',
-      'Do not copy transcript sentences verbatim. Synthesize, merge repeated ideas, and remove filler speech.',
-      'Explain concepts naturally, simplify complex explanations, and preserve technical accuracy.',
-      'Add missing background or examples when they help the student understand, but do not claim the lecture said them.',
-      'Only say the lecture lacks coverage when no relevant transcript context is provided.',
-      'Never return raw transcript excerpts as the final answer.',
-      'Prioritize teaching over summarizing. The student wants to understand, not review.',
+      'Use the transcript as the primary source. Synthesize, do not copy verbatim.',
+      'Explain concepts clearly, preserve technical accuracy, and add background only when it helps understanding.',
+      'Never claim the lecture said something it did not.',
       localization.promptInstruction(language),
     ].join(' ');
   },
@@ -112,31 +221,28 @@ export const promptBuilderService = {
 
     const system = [
       this.chatSystem(params.mode, params.language),
-      intentInstructions(intent),
+      INTENT_INSTRUCTIONS[intent],
+      INTENT_SCHEMAS[intent],
       modeInstructions(responseMode),
-      MANDATORY_JSON_SCHEMA,
-      'Do not include mode, confidence, citations, or sources; the server computes those.',
-      'Write readable educational content, not transcript snippets.',
-    ].join('\n\n');
+      'Return ONLY valid JSON. No markdown fences.',
+      'Do not include mode, confidence, citations, or sources.',
+    ].join('\n');
 
     const user = [
       `Video: ${params.videoTitle ?? params.videoId}`,
-      `Retrieval coverage estimate: ${params.coverage}`,
-      `Detected student intent: ${intent}`,
+      `Coverage: ${params.coverage}`,
+      `Intent: ${intent}`,
       lectureTopicsLine,
       '',
-      'Student question:',
-      params.question,
+      `Question: ${params.question}`,
       '',
-      'Retrieved transcript context — synthesize ALL of it, not just the first few chunks. If the context spans multiple topics, connect them:',
+      'Transcript context:',
       params.context || '(no transcript chunks were retrieved)',
       '',
       'Instructions:',
-      `- Respond in ${intent} mode: ${intentInstructions(intent).replace('INTENT: ' + intent.toUpperCase() + '. ', '')}`,
-      '- Fill EVERY JSON field. Empty fields are not allowed.',
-      '- If the transcript does not fully answer the question, use additionalExplanation and generalKnowledge to fill gaps.',
-      '- Use the full output budget. Completeness matters more than brevity.',
-      '- keyTakeaways must be specific to this question, not generic.',
+      '- Stay grounded in the transcript. Do not invent lecture quotes.',
+      '- Fill every field in the JSON schema.',
+      '- If the transcript is thin, use your knowledge to complete the answer.',
     ].join('\n');
 
     return { system, user };

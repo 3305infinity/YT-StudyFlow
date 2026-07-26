@@ -32,7 +32,7 @@ async function geminiFetchOnce(path: string, body: unknown, apiKey: string): Pro
       signal: controller.signal,
     });
     const text = await resp.text();
-    logDev('response', { path, status: resp.status, bodyPreview: text.slice(0, 200) });
+    logDev('response', { path, status: resp.status, body: text });
     return { ok: resp.ok, status: resp.status, body: text };
   } catch (err) {
     logDev('network-failure', { path, error: err instanceof Error ? err.message : String(err) });

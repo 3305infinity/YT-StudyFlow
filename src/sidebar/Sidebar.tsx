@@ -1,10 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { SidebarLayout } from './SidebarLayout';
 import { useVideo } from '@/hooks/useVideo';
 import { useTranscript } from '@/hooks/useTranscript';
-import { useRagStore } from '@/store/rag.store';
-import { useChatStore } from '@/features/chat/chat.store';
-import { usePlaylistStore } from '@/store/playlist.store';
+import { usePlaylistStore } from '@store/playlist.store';
 
 export interface SidebarProps {
   videoId: string;
@@ -14,10 +12,7 @@ export function Sidebar({ videoId }: SidebarProps) {
   const { loadVideo } = useVideo(videoId);
   const { loadTranscript } = useTranscript(videoId);
 
-  useEffect(() => {
-    useRagStore.getState().reset();
-    useChatStore.getState().clear();
-  }, [videoId]);
+  const onReloadTranscript = useMemo(() => () => void loadTranscript(), [loadTranscript]);
 
   useEffect(() => {
     void loadVideo();
@@ -27,7 +22,7 @@ export function Sidebar({ videoId }: SidebarProps) {
   return (
     <SidebarLayout
       videoId={videoId}
-      onReloadTranscript={() => void loadTranscript()}
+      onReloadTranscript={onReloadTranscript}
     />
   );
 }

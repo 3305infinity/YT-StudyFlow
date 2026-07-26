@@ -8,6 +8,7 @@ import { buildNotesPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localNotes } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
 import { scheduleSync, syncVideoScope } from '@/lib/sync/engine';
+import { getCurrentVideoId } from '@lib/youtube';
 
 function formatContext(chunks: SemanticChunk[], includeTimestamps: boolean): string {
   return chunks
@@ -29,6 +30,11 @@ export async function generateNote(params: {
   topicQuery?: string;
 }): Promise<Note> {
   const includeTimestamps = params.includeTimestamps ?? true;
+  const capturedVideoId = params.videoId;
+  const stale = () => getCurrentVideoId() !== capturedVideoId;
+
+  if (stale()) throw new Error('Video changed before note generation');
+
   const query = params.topicQuery
     ? `${params.topicQuery} ${params.type} study notes`
     : `${params.type} study notes key concepts walkthrough ${params.videoTitle ?? ''}`;
@@ -39,6 +45,7 @@ export async function generateNote(params: {
     0,
     []
   );
+  if (stale()) throw new Error('Video changed during note generation');
 
   const contextChunks = relevant.length ? relevant : params.semanticChunks;
   let title = `${params.type} notes`;
@@ -53,6 +60,7 @@ export async function generateNote(params: {
   try {
     const gemini = await createGeminiService();
     const settings = await getSettings();
+    if (stale()) throw new Error('Video changed during note generation');
     const context = formatContext(contextChunks, includeTimestamps);
     const { system, user } = buildNotesPrompt({
       mode: params.type,
@@ -71,24 +79,29 @@ export async function generateNote(params: {
       },
     });
 
+    if (stale()) throw new Error('Video changed during note generation');
+
     const parsed = parseJson<{ title: string; content: string; tags: string[] }>(resp.content);
     if (parsed?.title) title = parsed.title.trim();
     if (parsed?.content) content = parsed.content.trim();
     if (parsed?.tags) tags = parsed.tags;
   } catch (e) {
     console.warn('[YT StudyFlow] Gemini notes failed — using local', e);
+    if (stale()) throw new Error('Video changed during note generation');
     const local = localNotes(params.type, contextChunks, params.videoTitle);
     title = local.title;
     content = local.content;
   }
   }
 
+  if (stale()) throw new Error('Video changed before persisting note');
+
   const ts = nowMs();
-  const id = DbIds.note(params.videoId, `note_${params.type}_${ts}`);
+  const id = DbIds.note(capturedVideoId, `note_${params.type}_${ts}`);
 
   const note: Note = {
     id,
-    videoId: params.videoId,
+    videoId: capturedVideoId,
     type: params.type,
     title,
     content,
@@ -103,6 +116,7 @@ export async function generateNote(params: {
   };
 
   await ensureDbReady();
+  if (stale()) throw new Error('Video changed before persisting note');
   await getDb().notes.put({
     ...note,
     schemaVersion: 3,
@@ -114,13 +128,14 @@ export async function generateNote(params: {
 }
 
 export async function listNotes(videoId: string): Promise<Note[]> {
+  const capturedVideoId = videoId;
   await ensureDbReady();
   try {
     await syncVideoScope(videoId);
   } catch {
     // offline — serve Dexie cache
   }
-  const rows = await getDb().notes.where('videoId').equals(videoId).toArray();
+  const rows = await getDb().notes.where('videoId').equals(capturedVideoId).toArray();
   return rows
     .filter((r) => !r.deleted)
     .map((r) => ({

@@ -1,8 +1,7 @@
 import type { ResponseLanguageId } from '../lib/languages.js';
 import { normalizeLanguageId } from '../lib/languages.js';
-import { geminiService } from './gemini.service.js';
 import { ragService, type ScoredChunkResult } from './rag.service.js';
-import { promptBuilderService, detectIntent } from './promptBuilder.service.js';
+import { promptBuilderService, detectIntent, type Intent } from './promptBuilder.service.js';
 import { citationService, type Citation } from './citation.service.js';
 import { contextPackingService, type PackedContext } from './contextPacking.service.js';
 import { analyzeRetrieval } from './rag/coverage.js';
@@ -17,6 +16,7 @@ import { metricsService } from './metrics.service.js';
 import { retrievalMetrics, type RetrievalMetrics } from './retrievalMetrics.js';
 import { requestDeduplicator } from '../performance/requestDeduplicator.js';
 import { withTimeout } from '../reliability/timeout.js';
+import { runAnswerGenerationPipeline, type FormattedResponse } from './answerGeneration/pipeline.js';
 
 export type RetrievalMetadata = {
   coverage: CoverageCase;
@@ -74,53 +74,267 @@ type ParsedModelJson = {
   suggestedRelatedTopics: string[];
 };
 
-function sentenceCount(text: string): number {
-  return text.split(/[.!?]+/).filter((s) => s.trim().length > 0).length;
+function toMarkdownList(items: unknown[]): string {
+  return items.map((item) => `- ${String(item)}`).join('\n');
 }
 
-function validateParsedResponse(parsed: ParsedModelJson): { valid: boolean; reason?: string } {
-  if (sentenceCount(parsed.lectureContent) < 3) {
-    return { valid: false, reason: 'lectureContent too short' };
-  }
-  if (parsed.keyTakeaways.length < 3) {
-    return { valid: false, reason: 'keyTakeaways fewer than 3' };
-  }
-  if (!parsed.additionalExplanation.trim()) {
-    return { valid: false, reason: 'additionalExplanation empty' };
-  }
-  if (!parsed.generalKnowledge.trim()) {
-    return { valid: false, reason: 'generalKnowledge empty' };
-  }
-  return { valid: true };
+function parseExplainResponse(data: Record<string, unknown>): ParsedModelJson {
+  const concept = String(data.concept ?? '').trim();
+  const simpleExplanation = String(data.simpleExplanation ?? '').trim();
+  const example = String(data.example ?? '').trim();
+  const analogy = String(data.analogy ?? '').trim();
+
+  return {
+    summary: concept || 'Explanation',
+    lectureContent: simpleExplanation,
+    additionalExplanation: example,
+    generalKnowledge: analogy,
+    keyTakeaways: [simpleExplanation, example, analogy].filter(Boolean).map((s) => s.slice(0, 200)),
+    suggestedRelatedTopics: [],
+  };
 }
 
-function buildRepairPrompt(
-  system: string,
-  user: string,
-  invalidReason: string,
-  rawResponse: string
-): { system: string; user: string } {
-  const repairSystem = [
-    system,
-    'REPAIR REQUIRED: Your previous response was rejected because: ' + invalidReason,
-    'You must regenerate the JSON response following ALL field requirements exactly.',
-    'Every field must be populated. Never leave a field empty.',
-  ].join('\n\n');
+function parseCompareResponse(data: Record<string, unknown>): ParsedModelJson {
+  const comparison = Array.isArray(data.comparison) ? data.comparison : [];
+  const aspects = comparison
+    .map((item) => {
+      const aspect = String((item as Record<string, unknown>).aspect ?? '').trim();
+      const itemA = String((item as Record<string, unknown>).itemA ?? '').trim();
+      const itemB = String((item as Record<string, unknown>).itemB ?? '').trim();
+      const verdict = String((item as Record<string, unknown>).verdict ?? '').trim();
+      if (!aspect) return '';
+      return `**${aspect}**\n- Item A: ${itemA}\n- Item B: ${itemB}\n- Verdict: ${verdict}`;
+    })
+    .filter(Boolean);
 
-  const repairUser = [
-    user,
-    '',
-    'Your previous response was:',
-    rawResponse.slice(0, 2000),
-    '',
-    'REPAIR INSTRUCTIONS:',
-    '- Ensure lectureContent has at least 3 complete sentences.',
-    '- Ensure keyTakeaways has exactly 3-5 items.',
-    '- Ensure additionalExplanation and generalKnowledge are both non-empty.',
-    '- Return ONLY valid JSON. No markdown fences.',
-  ].join('\n');
+  const keyTakeaways = comparison
+    .map((item) => String((item as Record<string, unknown>).verdict ?? '').trim())
+    .filter(Boolean);
 
-  return { system: repairSystem, user: repairUser };
+  return {
+    summary: `Comparison with ${comparison.length} aspects`,
+    lectureContent: aspects.join('\n\n') || String(data.comparison ?? ''),
+    additionalExplanation: '',
+    generalKnowledge: '',
+    keyTakeaways: keyTakeaways.length ? keyTakeaways : ['See comparison details above.'],
+    suggestedRelatedTopics: [],
+  };
+}
+
+function parseInterviewResponse(data: Record<string, unknown>): ParsedModelJson {
+  const questions = Array.isArray(data.questions) ? data.questions : [];
+  const qaPairs = questions
+    .map((q, idx) => {
+      const question = String((q as Record<string, unknown>).question ?? '').trim();
+      const answer = String((q as Record<string, unknown>).answer ?? '').trim();
+      const followUp = String((q as Record<string, unknown>).followUp ?? '').trim();
+      if (!question) return '';
+      const parts = [`**Q${idx + 1}: ${question}**`, `A: ${answer}`];
+      if (followUp) parts.push(`Follow-up: ${followUp}`);
+      return parts.join('\n');
+    })
+    .filter(Boolean);
+
+  return {
+    summary: `${questions.length} interview questions with model answers`,
+    lectureContent: qaPairs.join('\n\n'),
+    additionalExplanation: '',
+    generalKnowledge: '',
+    keyTakeaways: questions.slice(0, 5).map((q, idx) => {
+      const question = String((q as Record<string, unknown>).question ?? '').trim();
+      return `Q${idx + 1}: ${question}`;
+    }),
+    suggestedRelatedTopics: [],
+  };
+}
+
+function parseWalkthroughResponse(data: Record<string, unknown>): ParsedModelJson {
+  const steps = Array.isArray(data.steps) ? data.steps : [];
+  const stepTexts = steps
+    .map((s, idx) => {
+      const action = String((s as Record<string, unknown>).action ?? '').trim();
+      const why = String((s as Record<string, unknown>).why ?? '').trim();
+      const pitfall = String((s as Record<string, unknown>).pitfall ?? '').trim();
+      if (!action) return '';
+      const parts = [`**Step ${idx + 1}: ${action}**`];
+      if (why) parts.push(`Why: ${why}`);
+      if (pitfall) parts.push(`Pitfall: ${pitfall}`);
+      return parts.join('\n');
+    })
+    .filter(Boolean);
+
+  return {
+    summary: `${steps.length}-step walkthrough`,
+    lectureContent: stepTexts.join('\n\n'),
+    additionalExplanation: '',
+    generalKnowledge: '',
+    keyTakeaways: steps.slice(0, 5).map((s, idx) => {
+      const action = String((s as Record<string, unknown>).action ?? '').trim();
+      return `Step ${idx + 1}: ${action}`;
+    }),
+    suggestedRelatedTopics: [],
+  };
+}
+
+function parseNotesResponse(data: Record<string, unknown>): ParsedModelJson {
+  const sections = Array.isArray(data.sections) ? data.sections : [];
+  const sectionTexts = sections
+    .map((section) => {
+      const heading = String((section as Record<string, unknown>).heading ?? '').trim();
+      const bullets = Array.isArray((section as Record<string, unknown>).bullets)
+        ? ((section as Record<string, unknown>).bullets as unknown[]).map((b) => String(b)).filter(Boolean)
+        : [];
+      if (!heading && !bullets.length) return '';
+      const parts = [`**${heading}**`];
+      if (bullets.length) parts.push(toMarkdownList(bullets));
+      return parts.join('\n');
+    })
+    .filter(Boolean);
+
+  const allBullets = sections
+    .flatMap((section) => {
+      const bullets = Array.isArray((section as Record<string, unknown>).bullets)
+        ? ((section as Record<string, unknown>).bullets as unknown[]).map((b) => String(b)).filter(Boolean)
+        : [];
+      return bullets;
+    })
+    .slice(0, 5);
+
+  return {
+    summary: sections.length ? `Notes with ${sections.length} sections` : 'Study notes',
+    lectureContent: sectionTexts.join('\n\n'),
+    additionalExplanation: '',
+    generalKnowledge: '',
+    keyTakeaways: allBullets,
+    suggestedRelatedTopics: [],
+  };
+}
+
+function parseQuizResponse(data: Record<string, unknown>): ParsedModelJson {
+  const questions = Array.isArray(data.questions) ? data.questions : [];
+  const questionTexts = questions
+    .map((q, idx) => {
+      const question = String((q as Record<string, unknown>).question ?? '').trim();
+      const options = Array.isArray((q as Record<string, unknown>).options)
+        ? ((q as Record<string, unknown>).options as unknown[]).map((o) => String(o)).filter(Boolean)
+        : [];
+      const correct = String((q as Record<string, unknown>).correct ?? '').trim();
+      const explanation = String((q as Record<string, unknown>).explanation ?? '').trim();
+      if (!question) return '';
+      const parts = [`**Q${idx + 1}: ${question}**`];
+      if (options.length) parts.push(options.join('\n'));
+      parts.push(`Correct: ${correct}`);
+      if (explanation) parts.push(`Explanation: ${explanation}`);
+      return parts.join('\n');
+    })
+    .filter(Boolean);
+
+  return {
+    summary: `${questions.length} quiz questions`,
+    lectureContent: questionTexts.join('\n\n'),
+    additionalExplanation: '',
+    generalKnowledge: '',
+    keyTakeaways: questions.slice(0, 5).map((q, idx) => {
+      const question = String((q as Record<string, unknown>).question ?? '').trim();
+      const correct = String((q as Record<string, unknown>).correct ?? '').trim();
+      return `Q${idx + 1}: ${question} (Correct: ${correct})`;
+    }),
+    suggestedRelatedTopics: [],
+  };
+}
+
+function parseExamReviewResponse(data: Record<string, unknown>): ParsedModelJson {
+  const topics = Array.isArray(data.topics) ? data.topics : [];
+  const topicTexts = topics
+    .map((t) => {
+      const topic = String((t as Record<string, unknown>).topic ?? '').trim();
+      const keyPoints = Array.isArray((t as Record<string, unknown>).keyPoints)
+        ? ((t as Record<string, unknown>).keyPoints as unknown[]).map((p) => String(p)).filter(Boolean)
+        : [];
+      const formula = String((t as Record<string, unknown>).formula ?? '').trim();
+      const pitfall = String((t as Record<string, unknown>).pitfall ?? '').trim();
+      if (!topic && !keyPoints.length) return '';
+      const parts = [`**${topic}**`];
+      if (keyPoints.length) parts.push(toMarkdownList(keyPoints));
+      if (formula) parts.push(`Formula: ${formula}`);
+      if (pitfall) parts.push(`Pitfall: ${pitfall}`);
+      return parts.join('\n');
+    })
+    .filter(Boolean);
+
+  const allKeyPoints = topics
+    .flatMap((t) => {
+      const keyPoints = Array.isArray((t as Record<string, unknown>).keyPoints)
+        ? ((t as Record<string, unknown>).keyPoints as unknown[]).map((p) => String(p)).filter(Boolean)
+        : [];
+      return keyPoints;
+    })
+    .slice(0, 5);
+
+  return {
+    summary: topics.length ? `Exam review with ${topics.length} topics` : 'Exam review',
+    lectureContent: topicTexts.join('\n\n'),
+    additionalExplanation: '',
+    generalKnowledge: '',
+    keyTakeaways: allKeyPoints,
+    suggestedRelatedTopics: [],
+  };
+}
+
+function parseIntentResponse(raw: string, intent: Intent, coverage: CoverageCase): ParsedModelJson {
+  const trimmed = raw.trim();
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  const candidate = jsonMatch?.[0] ?? trimmed;
+
+  try {
+    const parsed = JSON.parse(candidate) as Record<string, unknown>;
+
+    let result: ParsedModelJson;
+    switch (intent) {
+      case 'compare':
+        result = parseCompareResponse(parsed);
+        break;
+      case 'interview':
+        result = parseInterviewResponse(parsed);
+        break;
+      case 'walkthrough':
+        result = parseWalkthroughResponse(parsed);
+        break;
+      case 'notes':
+        result = parseNotesResponse(parsed);
+        break;
+      case 'quiz':
+        result = parseQuizResponse(parsed);
+        break;
+      case 'exam-review':
+        result = parseExamReviewResponse(parsed);
+        break;
+      case 'explain':
+      default:
+        result = parseExplainResponse(parsed);
+        break;
+    }
+
+    ragDevLog('structured-parse-success', {
+      intent,
+      coverage,
+      summaryLength: result.summary.length,
+      lectureContentLength: result.lectureContent.length,
+      additionalExplanationLength: result.additionalExplanation.length,
+      generalKnowledgeLength: result.generalKnowledge.length,
+      keyTakeaways: result.keyTakeaways.length,
+    });
+
+    return result;
+  } catch {
+    ragDevLog('structured-parse-failed', {
+      intent,
+      coverage,
+      rawResponse: trimmed,
+      contentPreview: trimmed.slice(0, 500),
+    });
+    return parseStructuredJson(trimmed, coverage);
+  }
 }
 
 function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJson {
@@ -143,7 +357,7 @@ function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJs
       parsed.generalKnowledge ?? (coverage === 'none' ? legacyExplanation : '')
     ).trim();
 
-    const result = {
+    return {
       summary: String(parsed.summary ?? '').trim(),
       lectureContent,
       additionalExplanation,
@@ -159,20 +373,10 @@ function parseStructuredJson(raw: string, coverage: CoverageCase): ParsedModelJs
           ? parsed.relatedTopics.map(String).filter(Boolean)
           : [],
     };
-
-    ragDevLog('structured-parse-success', {
-      coverage,
-      summaryLength: result.summary.length,
-      lectureContentLength: result.lectureContent.length,
-      additionalExplanationLength: result.additionalExplanation.length,
-      generalKnowledgeLength: result.generalKnowledge.length,
-      keyTakeaways: result.keyTakeaways.length,
-    });
-
-    return result;
   } catch {
     ragDevLog('structured-parse-failed', {
       coverage,
+      rawResponse: trimmed,
       contentPreview: trimmed.slice(0, 500),
     });
     return {
@@ -239,98 +443,45 @@ export const chatStructuredService = {
         })),
       });
 
-      const packedContexts: PackedContext[] = contextPackingService.pack(retrieved);
-      const promptStart = Date.now();
-      const context = packedContexts.map((p) => citationService.formatPackedContextLine(p)).join('\n\n');
-      const { system, user } = promptBuilderService.buildStructuredChatPrompt({
-        mode: params.mode ?? 'concise',
-        language,
-        coverage: analysis.coverage,
-        question: params.question,
-        videoTitle: params.videoTitle,
-        videoId: params.videoId,
-        context,
-        lectureRelatedTopics,
-        intent: detectIntent(params.question),
-      });
-      const promptLatencyMs = Date.now() - promptStart;
+      const chunksForPipeline = retrieved.map((r) => ({
+        text: r.chunk.text,
+        startTime: r.chunk.startTime,
+        endTime: r.chunk.endTime,
+      }));
 
-      ragDevLog('prompt', {
-        mode: responseMode,
-        coverage: analysis.coverage,
-        confidence,
-        confidenceLabel,
-        promptLengthChars: system.length + user.length,
-        contextChunks: retrieved.length,
-      });
-
-const geminiStarted = Date.now();
-      ragDevLog('gemini-request', {
-        model: 'gemini-3.5-flash',
-        mode: params.mode ?? 'concise',
-        temperature: 0.28,
-        maxOutputTokens: params.mode === 'deep' ? 2000 : 1500,
-      });
-      let result;
+      const pipelineStarted = Date.now();
+      let formatted: FormattedResponse;
       try {
-        result = await withTimeout(
-          geminiService.generateText({
-            model: 'gemini-3.5-flash',
-            prompt: { system, user },
-            config: {
-              temperature: 0.28,
-              maxOutputTokens: params.mode === 'deep' ? 2000 : 1500,
-            },
+        formatted = await withTimeout(
+          runAnswerGenerationPipeline({
+            question: params.question,
+            chunks: chunksForPipeline,
+            mode: params.mode ?? 'concise',
+            coverage: analysis.coverage,
+            language,
           }),
-          { timeoutMs: 15000, serviceName: 'gemini' }
+          { timeoutMs: 60000, serviceName: 'answer-generation' }
         );
       } catch (error) {
-        ragDevLog('gemini-failed', { error: String(error) });
+        ragDevLog('pipeline-failed', { error: String(error) });
         throw error;
       }
-      const generationLatencyMs = Date.now() - geminiStarted;
+      const pipelineLatencyMs = Date.now() - pipelineStarted;
 
-      ragDevLog('gemini-response', {
-        model: result.model,
-        tokensUsed: result.tokensUsed,
-        latencyMs: generationLatencyMs,
-        contentLength: result.content.length,
+      ragDevLog('intent-detected', {
+        question: params.question,
+        intent: formatted.intent,
+        targetConcept: formatted.targetConcept,
       });
 
-      let parsed = parseStructuredJson(result.content, analysis.coverage);
-
-      if (params.mode !== 'concise') {
-        const validation = validateParsedResponse(parsed);
-        if (!validation.valid) {
-          ragDevLog('structured-repair-attempt', { reason: validation.reason });
-          try {
-            const repair = buildRepairPrompt(
-              system,
-              user,
-              validation.reason ?? 'response incomplete',
-              result.content
-            );
-            const repairResult = await withTimeout(
-              geminiService.generateText({
-                model: 'gemini-3.5-flash',
-                prompt: repair,
-                config: {
-                  temperature: 0.28,
-                  maxOutputTokens: params.mode === 'deep' ? 2000 : 1500,
-                },
-              }),
-              { timeoutMs: 15000, serviceName: 'gemini-repair' }
-            );
-            parsed = parseStructuredJson(repairResult.content, analysis.coverage);
-            ragDevLog('structured-repair-success', {
-              lectureContentLength: parsed.lectureContent.length,
-              keyTakeaways: parsed.keyTakeaways.length,
-            });
-          } catch (repairError) {
-            ragDevLog('structured-repair-failed', { error: String(repairError) });
-          }
-        }
-      }
+      const parsed: ParsedModelJson = {
+        summary: formatted.summary,
+        lectureContent: formatted.lectureContent,
+        additionalExplanation: formatted.additionalExplanation,
+        generalKnowledge: formatted.generalKnowledge,
+        keyTakeaways: formatted.keyTakeaways,
+        suggestedRelatedTopics: formatted.suggestedRelatedTopics,
+      };
 
       const citations = citationService.buildCitations(
         retrieved.map((r) => ({ chunk: r.chunk, score: r.score }))
@@ -360,8 +511,8 @@ const geminiStarted = Date.now();
         avgTopSimilarity: analysis.avgTopSimilarity,
         chunkCount: analysis.chunkCount,
         topChunkIds: analysis.topChunkIds,
-        promptLengthChars: system.length + user.length,
-        geminiLatencyMs: generationLatencyMs,
+        promptLengthChars: 0,
+        geminiLatencyMs: pipelineLatencyMs,
       };
 
       return {
@@ -380,8 +531,8 @@ const geminiStarted = Date.now();
         citations,
         sources,
         retrievalMetadata,
-        model: result.model,
-        tokensUsed: result.tokensUsed,
+        model: formatted.model,
+        tokensUsed: formatted.tokensUsed,
         lectureAnswer: parsed.lectureContent,
         explanation: [parsed.lectureContent, parsed.additionalExplanation, parsed.generalKnowledge]
           .filter(Boolean)

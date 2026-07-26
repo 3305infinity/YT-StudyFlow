@@ -12,14 +12,13 @@ import { getTrackerEvents } from './confusionTracker';
 import { WorkspaceShell } from '@/components/WorkspaceShell';
 import { useAnalyticsStore } from '@/store/analytics.store';
 import { useRevisionStore } from '@/features/revision/revision.store';
+import { useVideoStore } from '@store/video.store';
 
 export function AnalyticsPanel({
   videoId,
-  duration,
   onJumpToTime,
 }: {
   videoId: string;
-  duration: number;
   onJumpToTime: (seconds: number) => void;
 }) {
   const [zones, setZones] = useState<ConfusionZone[]>([]);
@@ -28,6 +27,7 @@ export function AnalyticsPanel({
   const [hoverBucket, setHoverBucket] = useState<HeatmapBucket | null>(null);
   const quizAccuracy = useAnalyticsStore((s) => s.quizAccuracy);
   const flashcardsReviewed = useAnalyticsStore((s) => s.flashcardsReviewed);
+  const analyticsDuration = useAnalyticsStore((s) => s.duration);
   const fcStats = useRevisionStore((s) => s.getFlashcardStats());
 
   useEffect(() => {
@@ -44,19 +44,20 @@ export function AnalyticsPanel({
         videoId,
         buckets: d.buckets,
         zones: d.zones,
-        duration,
+        duration: analyticsDuration,
       });
     };
     const onConfusion = (e: Event) => {
       const d = (e as CustomEvent).detail as { videoId: string; events: LearningEvent[] };
       if (d.videoId !== videoId) return;
       setEvents(d.events ?? []);
-      useAnalyticsStore.getState().setSession({ videoId, events: d.events, duration });
+      useAnalyticsStore.getState().setSession({ videoId, events: d.events, duration: analyticsDuration });
     };
 
     const initial = getTrackerEvents();
     setEvents(initial);
-    useAnalyticsStore.getState().setSession({ videoId, events: initial, duration });
+    const currentDuration = useVideoStore.getState().duration;
+    useAnalyticsStore.getState().setSession({ videoId, events: initial, duration: currentDuration });
 
     window.addEventListener(STUDYFLOW_EVENTS.HEATMAP_UPDATE, onHeatmap);
     window.addEventListener(STUDYFLOW_EVENTS.CONFUSION_UPDATE, onConfusion);
@@ -64,16 +65,16 @@ export function AnalyticsPanel({
       window.removeEventListener(STUDYFLOW_EVENTS.HEATMAP_UPDATE, onHeatmap);
       window.removeEventListener(STUDYFLOW_EVENTS.CONFUSION_UPDATE, onConfusion);
     };
-  }, [videoId, duration]);
+  }, [videoId, analyticsDuration]);
 
-  const stats = useMemo(() => computeSessionStats(events, duration), [events, duration]);
+  const stats = useMemo(() => computeSessionStats(events, analyticsDuration), [events, analyticsDuration]);
 
   const hoverStats = useMemo(() => {
     if (!hoverBucket) return null;
     return getBucketEventStats(events, hoverBucket.startTime, hoverBucket.endTime);
   }, [hoverBucket, events]);
 
-  const studyMinutes = Math.round((stats.watchPercentEstimate / 100) * (duration / 60));
+  const studyMinutes = Math.round((stats.watchPercentEstimate / 100) * (analyticsDuration / 60));
 
   return (
     <WorkspaceShell title="Analytics" subtitle="Study signals from this session">
@@ -128,10 +129,10 @@ export function AnalyticsPanel({
               </div>
             )}
 
-            {duration > 0 && (
+            {analyticsDuration > 0 && (
               <div className="mt-1 flex justify-between font-mono text-[10px] text-neutral-600">
                 <span>0:00</span>
-                <span>{formatTime(duration)}</span>
+                <span>{formatTime(analyticsDuration)}</span>
               </div>
             )}
           </div>

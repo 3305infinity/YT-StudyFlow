@@ -3,6 +3,7 @@ import { emptyResponseError } from './gemini.errors.js';
 import { assertOkResponse, geminiPost } from './gemini.http.js';
 import {
   extractBatchEmbeddings,
+  extractGenerationMetadata,
   extractSingleEmbedding,
   extractText,
   parseJsonBody,
@@ -18,6 +19,10 @@ export type GenerateTextOutput = {
   content: string;
   tokensUsed?: number;
   model: string;
+  finishReason?: string;
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  rawResponseLength: number;
 };
 
 export type EmbedInput = {
@@ -34,12 +39,13 @@ export type EmbedOutput = {
 export const geminiService = {
    async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
     const model = input.model || GEMINI_DEFAULTS.textModel;
+    const maxOutputTokens = input.config?.maxOutputTokens ?? 1200;
     logDev('generateText:init', {
       model,
       hasSystemInstruction: !!input.prompt.system,
       userChars: input.prompt.user.length,
       temperature: input.config?.temperature ?? 0.3,
-      maxOutputTokens: input.config?.maxOutputTokens ?? 1200,
+      maxOutputTokens,
     });
     const result = await geminiPost(`/models/${encodeURIComponent(model)}:generateContent`, {
       system_instruction: input.prompt.system
@@ -48,26 +54,45 @@ export const geminiService = {
       contents: [{ role: 'user', parts: [{ text: input.prompt.user }] }],
       generation_config: {
         temperature: input.config?.temperature ?? 0.3,
-        maxOutputTokens: input.config?.maxOutputTokens ?? 1200,
+        maxOutputTokens,
       },
     });
 
     const text = assertOkResponse(result);
     const data = parseJsonBody<Record<string, unknown>>(text);
-    const usage = data.usageMetadata as { totalTokenCount?: number } | undefined;
+    const metadata = extractGenerationMetadata(data);
     const content = extractText(data);
     if (!content) throw emptyResponseError();
 
     logDev('generateText:parsed', {
       model,
       contentChars: content.length,
-      tokensUsed: usage?.totalTokenCount,
+      tokensUsed: metadata.totalTokenCount,
+      finishReason: metadata.finishReason,
+      candidateCount: metadata.candidateCount,
+      promptTokenCount: metadata.promptTokenCount,
+      candidatesTokenCount: metadata.candidatesTokenCount,
+      totalTokenCount: metadata.totalTokenCount,
+      rawResponseLength: text.length,
     });
+
+    if (metadata.finishReason !== 'STOP') {
+      logDev('generateText:finish-reason-warning', {
+        model,
+        finishReason: metadata.finishReason,
+        contentChars: content.length,
+        maxOutputTokens,
+      });
+    }
 
     return {
       content,
-      tokensUsed: usage?.totalTokenCount,
+      tokensUsed: metadata.totalTokenCount,
       model,
+      finishReason: metadata.finishReason,
+      promptTokenCount: metadata.promptTokenCount,
+      candidatesTokenCount: metadata.candidatesTokenCount,
+      rawResponseLength: text.length,
     };
   },
 

@@ -32,7 +32,8 @@ function getInnertubeHeaders(): Record<string, string> {
 
 async function innertubePost(
   endpoint: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
   const url = `https://www.youtube.com/youtubei/v1/${endpoint}?prettyPrint=false`;
   const body = JSON.stringify(payload);
@@ -44,6 +45,7 @@ async function innertubePost(
       credentials: 'include',
       headers,
       body,
+      signal,
     });
     if (resp.ok) {
       return (await resp.json()) as Record<string, unknown>;
@@ -66,7 +68,8 @@ async function innertubePost(
 
 export async function fetchTranscriptParamsViaNext(
   videoId: string,
-  player: Record<string, unknown> | null
+  player: Record<string, unknown> | null,
+  signal?: AbortSignal
 ): Promise<string | null> {
   const fromPage = getTranscriptInnertubeParams(player);
   if (fromPage) return fromPage;
@@ -83,17 +86,18 @@ export async function fetchTranscriptParamsViaNext(
     contentCheckOk: false,
   };
 
-  const next = await innertubePost('next', payload);
+  const next = await innertubePost('next', payload, signal);
   if (!next) return null;
 
   return getTranscriptInnertubeParams(next);
 }
 
 export async function fetchInnertubeTranscriptData(
-  params: string
+  params: string,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
   return innertubePost('get_transcript', {
     context: getInnertubeContext(),
     params,
-  });
+  }, signal);
 }

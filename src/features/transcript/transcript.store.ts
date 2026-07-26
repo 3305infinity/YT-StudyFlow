@@ -7,6 +7,7 @@ import type {
 } from '@/types/transcript';
 import type { ResponseLanguageId } from '@lib/languages';
 import { translateTranscript } from './transcriptTranslation.service';
+import { getCurrentVideoId } from '@lib/youtube';
 
 export type TranscriptAvailability = 'available' | 'no-transcript' | 'unknown';
 export type TranscriptViewMode = 'original' | 'translated';
@@ -190,6 +191,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   loadTranslation: async (targetLanguage) => {
     const { currentVideoId, enhancedChunks, language } = get();
     if (!currentVideoId || !enhancedChunks.length) return;
+    const capturedVideoId = currentVideoId;
 
     if (get().translationLanguage === targetLanguage && get().translatedChunks.length) {
       get().setTranslationView('translated');
@@ -199,11 +201,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     set({ translationLoading: true, translationError: null });
     try {
       const translated = await translateTranscript({
-        videoId: currentVideoId,
+        videoId: capturedVideoId,
         sourceChunks: enhancedChunks,
         targetLanguage,
         sourceLanguage: language ?? undefined,
       });
+      if (getCurrentVideoId() !== capturedVideoId) return;
       const { searchQuery } = get();
       const { displayChunks, filteredChunks } = applyDisplay(
         enhancedChunks,
@@ -220,6 +223,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         filteredChunks,
       });
     } catch (e) {
+      if (getCurrentVideoId() !== capturedVideoId) return;
       set({
         translationLoading: false,
         translationError: e instanceof Error ? e.message : String(e),

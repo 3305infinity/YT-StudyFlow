@@ -32,5 +32,6 @@ export const useUiStore = create<UiState>((set) => ({
   closeUtility: () => set({ utilityPanel: null }),
 
   toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
   dismissApiKeyBanner: () => set({ apiKeyBannerDismissed: true }),
 }));

@@ -10,12 +10,8 @@ export function useRagPipeline(videoId: string) {
   const settingsLoaded = useSettingsStore((s) => s.loaded);
 
   useEffect(() => {
-    useSettingsStore.getState().load();
+    void useSettingsStore.getState().load();
   }, []);
-
-  useEffect(() => {
-    useRagStore.getState().reset();
-  }, [videoId]);
 
   useEffect(() => {
     if (!videoId || transcriptStatus !== 'success' || !enhancedChunks.length) return;
@@ -28,7 +24,6 @@ export function useRagPipeline(videoId: string) {
 
   const rebuild = useCallback(() => {
     if (videoId && enhancedChunks.length) {
-      useRagStore.getState().reset();
       void buildIndex(videoId, enhancedChunks);
     }
   }, [videoId, enhancedChunks, buildIndex]);
