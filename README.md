@@ -2,7 +2,7 @@
 
 A production-grade RAG system for YouTube video content analysis with intelligent retrieval, context packing, and performance optimization.
 
-<img width="433" height="675" alt="image" src="https://github.com/user-attachments/assets/62af9024-f3a6-4502-a88b-43d708bc232e" />             <img width="863" height="1344" alt="image" src="https://github.com/user-attachments/assets/55394baa-afbf-4c36-a63a-196854f59e2b" />
+<img width="1421" height="673" alt="image" src="https://github.com/user-attachments/assets/5a6c657b-7e89-4bbc-8325-dd6a1f6b21cd" />
 
 
 ## Overview
