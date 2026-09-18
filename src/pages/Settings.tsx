@@ -1,191 +1,271 @@
-import { useEffect } from 'react';
-import { CheckCircle2, LogOut, Sparkles, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, LogOut, Sparkles, User, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
 import { useSettingsStore } from '@/store/settings.store';
 import { useAuthStore } from '@/store/auth.store';
-import { AUTH_DISABLED } from '@lib/config/auth.config';
 import { LanguageSelector } from '@/components/LanguageSelector';
+
 export function SettingsPanel() {
-  const { chatMode, defaultNoteType, loaded, load, update } = useSettingsStore();
+  const { chatMode, defaultNoteType, theme, loaded, load, update } = useSettingsStore();
   const {
     user,
     loaded: authLoaded,
-    signingIn,
-    signInError,
+    authenticating,
+    authError,
     load: loadAuth,
-    signIn,
+    login,
+    signup,
     signOut,
-    refreshProfile,
-    clearSignInError,
+    clearAuthError,
   } = useAuthStore();
+
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
     void loadAuth();
   }, [load, loadAuth]);
 
-  useEffect(() => {
-    if (!signingIn) return undefined;
-    const id = window.setInterval(() => void refreshProfile(), 1500);
-    return () => window.clearInterval(id);
-  }, [signingIn, refreshProfile]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    clearAuthError();
+
+    if (!email.trim() || !password) {
+      setLocalError('Please fill in all required fields.');
+      return;
+    }
+
+    if (authMode === 'signup') {
+      if (password.length < 6) {
+        setLocalError('Password must be at least 6 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setLocalError('Passwords do not match.');
+        return;
+      }
+      try {
+        await signup({ name, email, password, confirmPassword });
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+      } catch {
+        // handled in store
+      }
+    } else {
+      try {
+        await login({ email, password });
+        setEmail('');
+        setPassword('');
+      } catch {
+        // handled in store
+      }
+    }
+  };
 
   return (
-    <div className="space-y-4 overflow-y-auto p-4">
-      <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-        <div className="flex items-center gap-2 text-white">
-          <User className="h-4 w-4 text-indigo-300" />
-          <h3 className="text-sm font-semibold">Account</h3>
+    <div className="space-y-4 overflow-y-auto p-4 font-sans text-content">
+      {/* ---------- Account Section ---------- */}
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-1">
+        <div className="flex items-center gap-2 mb-3">
+          <User className="h-4 w-4 text-brand" />
+          <h3 className="text-sm font-semibold text-content">Account & Authentication</h3>
         </div>
 
         {!authLoaded ? (
-          <p className="mt-3 text-xs text-white/45">Loading account…</p>
-        ) : AUTH_DISABLED ? (
-          /* TODO: Re-enable Clerk account UI when AUTH_DISABLED is false. */
-          <div className="mt-3 space-y-2">
-            <div className="flex items-center gap-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-500/20 ring-2 ring-indigo-400/20">
-                <User className="h-5 w-5 text-indigo-100" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-white">{user?.name ?? 'Guest'}</p>
-                <p className="text-xs text-white/50">Authentication temporarily disabled</p>
-              </div>
-            </div>
-            <p className="text-[11px] leading-5 text-white/45">
-              All AI features are available without sign-in. Clerk auth code is preserved for future re-enable.
-            </p>
+          <div className="flex items-center gap-2 py-4 text-xs text-content-subtle">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Checking authentication status…</span>
           </div>
         ) : user ? (
-          <div className="mt-3 space-y-3">
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3">
-              {user.imageUrl ? (
-                <img
-                  src={user.imageUrl}
-                  alt=""
-                  className="h-11 w-11 rounded-full ring-2 ring-emerald-400/30 object-cover"
-                />
-              ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/20 ring-2 ring-emerald-400/20">
-                  <User className="h-5 w-5 text-emerald-100" />
-                </div>
-              )}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-base">
+                {(user.name || user.email || 'U')[0]?.toUpperCase()}
+              </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-emerald-200">
+                <div className="flex items-center gap-1.5 text-emerald-400">
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span className="text-xs font-medium">Signed in</span>
+                  <span className="text-xs font-semibold">Signed in</span>
                 </div>
-                <p className="mt-1 truncate text-sm font-semibold text-white">
-                  {user.name || user.email || user.userId}
+                <p className="mt-0.5 truncate text-sm font-bold text-content">
+                  {user.name || 'User'}
                 </p>
-                {user.email && user.name && (
-                  <p className="truncate text-xs text-white/50">{user.email}</p>
+                {user.email && (
+                  <p className="truncate text-xs text-content-subtle">{user.email}</p>
                 )}
               </div>
             </div>
 
-            {signInError && (
-              <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                {signInError}
-              </p>
-            )}
-
-            {user.usage && (
-              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-wide text-white/40">AI usage today</p>
-                <p className="mt-1 text-sm font-medium text-white">
-                  {user.usage.remaining} of {user.usage.limit} requests left
-                </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-400"
-                    style={{
-                      width: `${Math.min(100, (user.usage.used / Math.max(user.usage.limit, 1)) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
             <button
               type="button"
               onClick={() => void signOut()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm text-white/80 hover:bg-white/8"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface-raised px-4 py-2.5 text-xs font-medium text-content hover:bg-surface-overlay hover:text-danger transition-colors"
             >
               <LogOut className="h-4 w-4" />
               Sign out
             </button>
           </div>
         ) : (
-          /* TODO: Re-enable Google sign-in button when AUTH_DISABLED is false. */
-          <div className="mt-3 space-y-3">
-            <p className="text-xs leading-5 text-white/55">
-              Sign in with Google to unlock AI chat, notes, quizzes, and cloud sync across devices.
-            </p>
+          <div className="space-y-3">
+            {/* Form Toggle: Login vs Signup */}
+            <div className="flex rounded-lg border border-line bg-surface-raised p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setLocalError(null);
+                  clearAuthError();
+                }}
+                className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${
+                  authMode === 'login'
+                    ? 'bg-brand text-white shadow-cta'
+                    : 'text-content-muted hover:text-content'
+                }`}
+              >
+                Log In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('signup');
+                  setLocalError(null);
+                  clearAuthError();
+                }}
+                className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${
+                  authMode === 'signup'
+                    ? 'bg-brand text-white shadow-cta'
+                    : 'text-content-muted hover:text-content'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
 
-            {signInError && (
-              <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2.5">
-                <p className="text-xs leading-5 text-red-100">{signInError}</p>
-                <button
-                  type="button"
-                  onClick={clearSignInError}
-                  className="mt-2 text-[11px] text-red-200/80 underline underline-offset-2 hover:text-red-100"
-                >
-                  Dismiss
-                </button>
+            {(localError || authError) && (
+              <div className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 p-3 text-xs text-danger">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div className="flex-1 leading-snug">{localError || authError}</div>
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => void signIn()}
-              disabled={signingIn}
-              className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-900 shadow-sm hover:bg-white/95 disabled:opacity-60"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              {signingIn ? 'Complete sign-in in the popup…' : 'Continue with Google'}
-            </button>
+            <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
+              {authMode === 'signup' && (
+                <div>
+                  <label className="block text-[11px] font-medium text-content-subtle mb-1">Full Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-content-subtle" />
+                    <input
+                      type="text"
+                      placeholder="Jane Doe"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full rounded-xl border border-line bg-surface-raised pl-9 pr-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-medium text-content-subtle mb-1">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 h-4 w-4 text-content-subtle" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-surface-raised pl-9 pr-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-content-subtle mb-1">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 h-4 w-4 text-content-subtle" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-surface-raised pl-9 pr-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {authMode === 'signup' && (
+                <div>
+                  <label className="block text-[11px] font-medium text-content-subtle mb-1">Confirm Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-content-subtle" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full rounded-xl border border-line bg-surface-raised pl-9 pr-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={authenticating}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-xs font-bold text-white shadow-cta hover:opacity-95 disabled:opacity-50 transition-all mt-3"
+              >
+                {authenticating && <Loader2 className="h-4 w-4 animate-spin" />}
+                <span>{authMode === 'login' ? 'Log In' : 'Create Account'}</span>
+              </button>
+            </form>
           </div>
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 space-y-3">
+      {/* ---------- Preferences Section ---------- */}
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3 shadow-1">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-indigo-300" />
-          <h3 className="text-sm font-semibold text-white">Preferences</h3>
+          <Sparkles className="h-4 w-4 text-brand" />
+          <h3 className="text-sm font-semibold text-content">Preferences</h3>
         </div>
 
         {!loaded ? (
-          <p className="text-xs text-white/45">Loading preferences…</p>
+          <p className="text-xs text-content-subtle">Loading preferences…</p>
         ) : (
           <>
             <LanguageSelector variant="full" />
-            <p className="text-[11px] leading-5 text-white/40">
-              Global application language for chat, notes, quizzes, flashcards, study plans,
-              summaries, and transcript translation. Change it once in the header or here.
+            <p className="text-[11px] leading-5 text-content-subtle">
+              Global application language for chat, notes, quizzes, flashcards, and transcript translation.
             </p>
-            <label className="block text-xs text-white/55">
+
+            <label className="block text-xs font-medium text-content-subtle">
+              Theme Mode
+              <select
+                value={theme}
+                onChange={(e) => update({ theme: e.target.value as 'dark' | 'light' })}
+                className="mt-1.5 w-full rounded-xl border border-line bg-surface-raised px-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
+              >
+                <option value="dark">Dark Mode</option>
+                <option value="light">Light Mode</option>
+              </select>
+            </label>
+
+            <label className="block text-xs font-medium text-content-subtle">
               Default chat mode
               <select
                 value={chatMode}
                 onChange={(e) => update({ chatMode: e.target.value as typeof chatMode })}
-                className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white focus:border-indigo-400/40 focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-line bg-surface-raised px-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
               >
                 <option value="concise">Concise</option>
                 <option value="deep">Deep</option>
@@ -193,14 +273,12 @@ export function SettingsPanel() {
               </select>
             </label>
 
-            <label className="block text-xs text-white/55">
+            <label className="block text-xs font-medium text-content-subtle">
               Default note type
               <select
                 value={defaultNoteType}
-                onChange={(e) =>
-                  update({ defaultNoteType: e.target.value as typeof defaultNoteType })
-                }
-                className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white focus:border-indigo-400/40 focus:outline-none"
+                onChange={(e) => update({ defaultNoteType: e.target.value as typeof defaultNoteType })}
+                className="mt-1.5 w-full rounded-xl border border-line bg-surface-raised px-3 py-2 text-xs text-content focus:border-brand focus:outline-none"
               >
                 <option value="concise">Concise</option>
                 <option value="detailed">Detailed</option>

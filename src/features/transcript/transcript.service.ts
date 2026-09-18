@@ -124,285 +124,431 @@ function successResult(
 
 
 
-async function fetchFromTrack(baseUrl: string, signal?: AbortSignal): Promise<RawCue[] | null> {
+type DiagnosticPayload = {
+  videoId: string;
+  transport: string;
+  elapsedMs: number;
+  success: boolean;
+  status?: number;
+  contentType?: string;
+  bodyLength?: number;
+  cueCount?: number;
+  error?: string;
+  details?: Record<string, unknown>;
+};
+
+function logDebug(tag: string, data: DiagnosticPayload): void {
+  const line = `[TRANSCRIPT DEBUG] ${tag} | videoId:${data.videoId} | transport:${data.transport} | elapsed:${data.elapsedMs}ms | success:${data.success}${
+    data.status !== undefined ? ` | status:${data.status}` : ''
+  }${data.contentType ? ` | type:${data.contentType}` : ''}${
+    data.bodyLength !== undefined ? ` | len:${data.bodyLength}` : ''
+  }${data.cueCount !== undefined ? ` | cues:${data.cueCount}` : ''}${
+    data.error ? ` | error:${data.error}` : ''
+  }`;
+  if (data.success) {
+    console.log(line, data.details ?? '');
+  } else {
+    console.warn(line, data.details ?? '');
+  }
+}
+
+function maskUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const params = new URLSearchParams(parsed.search);
+    for (const key of ['sig', 's', 'key', 'token', 'exp', 'xoaf', 'xow']) {
+      if (params.has(key)) params.set(key, '***');
+    }
+    return `${parsed.origin}${parsed.pathname}?${params.toString()}`;
+  } catch {
+    return url.slice(0, 100);
+  }
+}
+
+async function fetchFromTrack(
+  videoId: string,
+  baseUrl: string,
+  signal?: AbortSignal
+): Promise<RawCue[] | null> {
+  const masked = maskUrl(baseUrl);
+  const startTime = performance.now();
+
+  logDebug('FETCH_ATTEMPT', {
+    videoId,
+    transport: 'direct-track-url',
+    elapsedMs: 0,
+    success: true,
+    details: { maskedUrl: masked },
+  });
+
+  logDebug('TRANSPORT_SELECTED', {
+    videoId,
+    transport: 'main-world-xhr',
+    elapsedMs: Math.round(performance.now() - startTime),
+    success: true,
+  });
+
+  logDebug('REQUEST_SENT', {
+    videoId,
+    transport: 'main-world-xhr',
+    elapsedMs: Math.round(performance.now() - startTime),
+    success: true,
+  });
 
   let result = await fetchFromCapturedCache(baseUrl);
 
   if (!result.ok) {
-
     result = await fetchCaptionTextWithFormats(baseUrl, signal);
-
   }
 
   if (!result.ok || !result.text) {
-
     result = await waitForCapturedCaptions(baseUrl);
-
   }
 
-  if (!result.ok || !result.text) return null;
+  const elapsedMs = Math.round(performance.now() - startTime);
 
+  if (!result.ok || !result.text) {
+    logDebug('RESPONSE_RECEIVED', {
+      videoId,
+      transport: result.via ?? 'main-world-xhr',
+      elapsedMs,
+      success: false,
+      error: 'Empty response or transport failure',
+    });
+    return null;
+  }
 
+  logDebug('RESPONSE_RECEIVED', {
+    videoId,
+    transport: result.via ?? 'main-world-xhr',
+    elapsedMs,
+    success: true,
+    status: 200,
+    contentType: result.contentType || 'text/xml',
+    bodyLength: result.text.length,
+  });
+
+  logDebug('PARSE_STARTED', {
+    videoId,
+    transport: result.via ?? 'parser',
+    elapsedMs: Math.round(performance.now() - startTime),
+    success: true,
+  });
 
   const cues = parseCaptionPayload(result.text, result.contentType);
+  const parseElapsed = Math.round(performance.now() - startTime);
 
   if (!cues?.length) {
-
-    console.warn('[YT StudyFlow] caption data received but parse failed', {
-
-      via: result.via,
-
-      len: result.text.length,
-
-      preview: result.text.slice(0, 120),
-
+    logDebug('PARSE_RESULT', {
+      videoId,
+      transport: result.via ?? 'parser',
+      elapsedMs: parseElapsed,
+      success: false,
+      cueCount: 0,
+      error: 'Payload parse returned 0 valid cues',
     });
-
+    return null;
   }
 
-  return cues;
+  logDebug('PARSE_RESULT', {
+    videoId,
+    transport: result.via ?? 'parser',
+    elapsedMs: parseElapsed,
+    success: true,
+    cueCount: cues.length,
+  });
 
+  return cues;
 }
 
-
-
-async function fetchFromTimedtext(videoId: string, lang: string, signal?: AbortSignal): Promise<RawCue[] | null> {
-
+async function fetchFromTimedtext(
+  videoId: string,
+  lang: string,
+  signal?: AbortSignal
+): Promise<RawCue[] | null> {
+  const startTime = performance.now();
   const url = buildTimedtextUrl(videoId, lang);
 
+  logDebug('FETCH_ATTEMPT', {
+    videoId,
+    transport: `timedtext-api-${lang}`,
+    elapsedMs: 0,
+    success: true,
+  });
+
   const result = await fetchCaptionText(url, signal);
+  const elapsedMs = Math.round(performance.now() - startTime);
 
-  if (!result.ok || !result.text) return null;
+  if (!result.ok || !result.text) {
+    logDebug('RESPONSE_RECEIVED', {
+      videoId,
+      transport: `timedtext-api-${lang}`,
+      elapsedMs,
+      success: false,
+      error: 'Timedtext API returned empty or failed',
+    });
+    return null;
+  }
 
-  return parseCaptionPayload(result.text, result.contentType);
+  logDebug('RESPONSE_RECEIVED', {
+    videoId,
+    transport: `timedtext-api-${lang}`,
+    elapsedMs,
+    success: true,
+    status: 200,
+    contentType: result.contentType,
+    bodyLength: result.text.length,
+  });
 
+  const cues = parseCaptionPayload(result.text, result.contentType);
+  if (cues?.length) {
+    logDebug('PARSE_RESULT', {
+      videoId,
+      transport: `timedtext-api-${lang}`,
+      elapsedMs: Math.round(performance.now() - startTime),
+      success: true,
+      cueCount: cues.length,
+    });
+  }
+  return cues;
 }
 
-
-
 async function fetchFromInnertube(
-
   videoId: string,
-
   player: Record<string, unknown> | null,
-
   signal?: AbortSignal
-
 ): Promise<RawCue[] | null> {
+  const startTime = performance.now();
+  logDebug('FETCH_ATTEMPT', {
+    videoId,
+    transport: 'innertube-api',
+    elapsedMs: 0,
+    success: true,
+  });
 
   const params = await fetchTranscriptParamsViaNext(videoId, player);
 
   if (!params) {
-
-    console.log('[YT StudyFlow] no InnerTube transcript params found');
-
+    logDebug('RESPONSE_RECEIVED', {
+      videoId,
+      transport: 'innertube-api',
+      elapsedMs: Math.round(performance.now() - startTime),
+      success: false,
+      error: 'No InnerTube transcript params found on page',
+    });
     return null;
-
   }
-
-
 
   const data = await fetchInnertubeTranscriptData(params, signal);
-
   if (!data) {
-
-    console.warn('[YT StudyFlow] InnerTube get_transcript returned empty');
-
+    logDebug('RESPONSE_RECEIVED', {
+      videoId,
+      transport: 'innertube-api',
+      elapsedMs: Math.round(performance.now() - startTime),
+      success: false,
+      error: 'InnerTube get_transcript endpoint returned empty',
+    });
     return null;
-
   }
 
-
-
-  return parseInnertubeTranscript(data);
-
+  const cues = parseInnertubeTranscript(data);
+  if (cues?.length) {
+    logDebug('PARSE_RESULT', {
+      videoId,
+      transport: 'innertube-api',
+      elapsedMs: Math.round(performance.now() - startTime),
+      success: true,
+      cueCount: cues.length,
+    });
+  }
+  return cues;
 }
 
+const activeInFlightRequests = new Map<string, Promise<ExtractResult>>();
+
 export async function fetchTranscriptChunks(videoId: string): Promise<ExtractResult> {
-
   if (!videoId) {
-
+    console.error('[TRANSCRIPT DEBUG] fetchTranscriptChunks called with missing videoId');
     return { status: 'error', reason: 'Missing video ID' };
-
   }
 
+  const existing = activeInFlightRequests.get(videoId);
+  if (existing) {
+    console.log(`[TRANSCRIPT DEBUG] DEDUPLICATED_IN_FLIGHT_REQUEST | videoId:${videoId}`);
+    return existing;
+  }
+
+  const promise = (async () => {
+    try {
+      return await executeFetchPipeline(videoId);
+    } finally {
+      activeInFlightRequests.delete(videoId);
+    }
+  })();
+
+  activeInFlightRequests.set(videoId, promise);
+  return promise;
+}
+
+async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
+  const startTime = performance.now();
   const capturedVideoId = videoId;
   const stale = () => getCurrentVideoId() !== capturedVideoId;
   const controller = new AbortController();
 
-  // Turn on CC in the player so timedtext / XHR capture can succeed without manual toggling.
+  logDebug('FETCH_ATTEMPT', {
+    videoId: capturedVideoId,
+    transport: 'pipeline-start',
+    elapsedMs: 0,
+    success: true,
+  });
+
+  // Trigger CC toggle in main world asynchronously
   const { triggerPlayerCaptions } = await import('./transcript.pageFetch');
-  await triggerPlayerCaptions();
-  if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-  await new Promise((r) => setTimeout(r, 600));
-  if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
+  void triggerPlayerCaptions();
 
-  const player = getPlayerResponse();
+  let player = getPlayerResponse();
+  let tracks = getCaptionTracksFromPage();
 
-  const tracks = getCaptionTracksFromPage();
+  // If no tracks found immediately, retry up to 3 times to allow player JS to finish mounting
+  if (!tracks.length) {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 300));
+      if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
+      player = getPlayerResponse();
+      tracks = getCaptionTracksFromPage();
+      if (tracks.length) break;
+    }
+  }
 
   const track = chooseCaptionTrack(tracks);
 
-
-
-  console.log('[YT StudyFlow] transcript:', {
-
-    videoId: capturedVideoId,
-
-    trackCount: tracks.length,
-
-    hasPlayer: !!player,
-
-    hasTrack: !!track,
-
-    trackLang: track?.languageCode,
-
-  });
-
-
-
   try {
-
-    const innertubeCues = await fetchFromInnertube(capturedVideoId, player, controller.signal);
-
-    if (innertubeCues?.length) {
-
-      if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-
-      console.log('[YT StudyFlow] transcript loaded via InnerTube', innertubeCues.length);
-
-      return successResult(capturedVideoId, innertubeCues, track);
-
-    }
-
-
-
+    // 1. Direct caption track URL (FASTEST ~50-150ms)
     if (track?.baseUrl) {
-
-      const cues = await fetchFromTrack(track.baseUrl, controller.signal);
-
+      const cues = await fetchFromTrack(capturedVideoId, track.baseUrl, controller.signal);
       if (cues?.length) {
-
         if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-
-        console.log('[YT StudyFlow] transcript loaded via caption URL', cues.length);
-
+        logDebug('STORE_UPDATE', {
+          videoId: capturedVideoId,
+          transport: 'direct-track-success',
+          elapsedMs: Math.round(performance.now() - startTime),
+          success: true,
+          cueCount: cues.length,
+        });
         return successResult(capturedVideoId, cues, track);
-
       }
-
     }
 
-
-
+    // 2. Direct timedtext API for common languages (~150-250ms)
     const langs = [
-
       track?.languageCode,
-
       'en',
-
       'en-US',
-
       'en-GB',
-
       ...tracks.map((t) => t.languageCode),
-
     ].filter((l, i, a): l is string => !!l && a.indexOf(l) === i);
 
-
-
     for (const lang of langs) {
-
       const cues = await fetchFromTimedtext(capturedVideoId, lang, controller.signal);
-
       if (cues?.length) {
-
         if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-
-        console.log('[YT StudyFlow] transcript loaded via timedtext', lang, cues.length);
-
+        logDebug('STORE_UPDATE', {
+          videoId: capturedVideoId,
+          transport: `timedtext-${lang}-success`,
+          elapsedMs: Math.round(performance.now() - startTime),
+          success: true,
+          cueCount: cues.length,
+        });
         return successResult(capturedVideoId, cues, { languageCode: lang, isAutoGenerated: false });
-
       }
-
     }
 
-
-
+    // 3. Alternate caption tracks
     for (const t of tracks) {
-
       if (t.baseUrl === track?.baseUrl) continue;
-
-      const cues = await fetchFromTrack(t.baseUrl, controller.signal);
-
+      const cues = await fetchFromTrack(capturedVideoId, t.baseUrl, controller.signal);
       if (cues?.length) {
-
         if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-
-        console.log('[YT StudyFlow] transcript loaded via alt track', t.languageCode);
-
+        logDebug('STORE_UPDATE', {
+          videoId: capturedVideoId,
+          transport: `alt-track-${t.languageCode}-success`,
+          elapsedMs: Math.round(performance.now() - startTime),
+          success: true,
+          cueCount: cues.length,
+        });
         return successResult(capturedVideoId, cues, t);
-
       }
-
     }
 
-
-
-    const domCues = await extractFromDomWithPanelOpen();
-
-    if (domCues.length) {
-
+    // 4. InnerTube API fallback
+    const innertubeCues = await fetchFromInnertube(capturedVideoId, player, controller.signal);
+    if (innertubeCues?.length) {
       if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-
-      console.log('[YT StudyFlow] transcript loaded via DOM panel', domCues.length);
-
-      return successResult(capturedVideoId, domCues, track);
-
+      logDebug('STORE_UPDATE', {
+        videoId: capturedVideoId,
+        transport: 'innertube-success',
+        elapsedMs: Math.round(performance.now() - startTime),
+        success: true,
+        cueCount: innertubeCues.length,
+      });
+      return successResult(capturedVideoId, innertubeCues, track);
     }
 
-
+    // 5. DOM Panel Extraction fallback
+    const domCues = await extractFromDomWithPanelOpen();
+    if (domCues.length) {
+      if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
+      logDebug('STORE_UPDATE', {
+        videoId: capturedVideoId,
+        transport: 'dom-panel-success',
+        elapsedMs: Math.round(performance.now() - startTime),
+        success: true,
+        cueCount: domCues.length,
+      });
+      return successResult(capturedVideoId, domCues, track);
+    }
 
     if (!tracks.length) {
-
+      logDebug('STORE_UPDATE', {
+        videoId: capturedVideoId,
+        transport: 'pipeline-failed',
+        elapsedMs: Math.round(performance.now() - startTime),
+        success: false,
+        error: 'No caption tracks found on page',
+      });
       return {
-
         status: 'not-available',
-
-        reason: 'No captions on this video. Enable CC on the YouTube player first.',
-
+        reason: 'No captions found on this video. Turn on CC (subtitles) on YouTube, then click Retry.',
       };
-
     }
 
-
-
+    logDebug('STORE_UPDATE', {
+      videoId: capturedVideoId,
+      transport: 'pipeline-failed',
+      elapsedMs: Math.round(performance.now() - startTime),
+      success: false,
+      error: 'All caption fetch attempts failed',
+    });
     return {
-
       status: 'not-available',
-
-      reason:
-
-        'Captions exist but could not be downloaded. Turn on CC (subtitles) on the player, then click Retry.',
-
+      reason: 'Captions exist but could not be downloaded. Turn on CC on the player, then click Retry.',
     };
-
-
-
   } catch (err) {
-
     if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-
+    const stack = err instanceof Error ? err.stack : undefined;
+    logDebug('STORE_UPDATE', {
+      videoId: capturedVideoId,
+      transport: 'pipeline-exception',
+      elapsedMs: Math.round(performance.now() - startTime),
+      success: false,
+      error: `${err instanceof Error ? err.message : String(err)}${stack ? ` | ${stack}` : ''}`,
+    });
     return {
-
       status: 'error',
-
       reason: err instanceof Error ? err.message : String(err),
-
     };
-
   }
-
 }
 
 

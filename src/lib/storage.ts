@@ -11,6 +11,7 @@ export interface Settings {
   chatMode: 'concise' | 'deep' | 'interview';
   defaultNoteType: 'concise' | 'detailed' | 'interview' | 'revision';
   responseLanguage: ResponseLanguageId;
+  theme: 'dark' | 'light';
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS: Settings = {
   chatMode: 'concise',
   defaultNoteType: 'concise',
   responseLanguage: DEFAULT_RESPONSE_LANGUAGE,
+  theme: 'dark',
 };
 
 

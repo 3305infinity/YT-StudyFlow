@@ -9,6 +9,7 @@ interface SettingsState extends Settings {
   loaded: boolean;
   load: () => Promise<void>;
   update: (partial: Partial<Settings>) => Promise<void>;
+  toggleTheme: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -16,11 +17,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   chatMode: 'concise',
   defaultNoteType: 'concise',
   responseLanguage: DEFAULT_RESPONSE_LANGUAGE,
+  theme: 'dark',
   loaded: false,
 
   load: async () => {
     const s = await getSettings();
     set({ ...s, loaded: true });
+  },
+
+  toggleTheme: async () => {
+    const current = get().theme;
+    const next = current === 'dark' ? 'light' : 'dark';
+    await saveSettings({ theme: next });
+    set({ theme: next });
   },
 
   update: async (partial) => {

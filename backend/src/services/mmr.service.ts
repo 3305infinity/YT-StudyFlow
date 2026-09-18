@@ -50,18 +50,18 @@ export function mmr(
     for (let i = 0; i < remaining.length; i++) {
       const candidate = remaining[i];
 
-      if (!candidate.values) {
-        continue;
-      }
-
-      const querySim = cosineSimilarity(queryNorm, candidate.values);
+      const querySim = candidate.values
+        ? cosineSimilarity(queryNorm, candidate.values)
+        : candidate.score;
 
       let maxSimToSelected = 0;
-      for (const s of selected) {
-        if (s.values) {
-          const sim = cosineSimilarity(candidate.values, s.values);
-          if (sim > maxSimToSelected) {
-            maxSimToSelected = sim;
+      if (candidate.values) {
+        for (const s of selected) {
+          if (s.values) {
+            const sim = cosineSimilarity(candidate.values, s.values);
+            if (sim > maxSimToSelected) {
+              maxSimToSelected = sim;
+            }
           }
         }
       }

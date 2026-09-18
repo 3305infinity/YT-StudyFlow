@@ -27,6 +27,11 @@ const embedSchema = z.object({
     .optional(),
 });
 
+const transformLanguageSchema = z.object({
+  content: z.string().min(1).max(50_000),
+  targetLanguage: z.string().min(1),
+});
+
 export const aiRoutes = Router();
 
 aiRoutes.post(
@@ -41,6 +46,15 @@ aiRoutes.post(
 aiRoutes.post('/embed', enforceDailyQuota, validateBody(embedSchema), (req, res, next) => {
   aiController.embed(req as AuthedRequest, res).catch(next);
 });
+
+aiRoutes.post(
+  '/transform-language',
+  enforceDailyQuota,
+  validateBody(transformLanguageSchema),
+  (req, res, next) => {
+    aiController.transformLanguage(req as AuthedRequest, res).catch(next);
+  }
+);
 
 aiRoutes.get('/health', (req, res, next) => {
   aiController.health(req as AuthedRequest, res).catch(next);

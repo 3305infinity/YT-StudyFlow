@@ -31,11 +31,21 @@ export type RetrievalMetadata = {
 
 export type StructuredChatResponse = {
   mode: ResponseMode;
+  directAnswer?: string;
   summary: string;
   lectureContent: string;
   additionalExplanation: string;
   generalKnowledge: string;
+  steps?: string[];
+  technicalInsight?: string;
+  applications?: string[];
   keyTakeaways: string[];
+  sections?: Array<{
+    title: string;
+    content: string;
+    type: 'explanation' | 'steps' | 'technical' | 'application' | 'recap';
+    items?: string[];
+  }>;
   lectureRelatedTopics: string[];
   suggestedRelatedTopics: string[];
   citations: Citation[];
@@ -43,6 +53,8 @@ export type StructuredChatResponse = {
   coverage: CoverageCase;
   confidence: number;
   confidenceLabel: ConfidenceLabel;
+  confidenceDisplayLabel: string;
+  confidenceReason: string;
   retrievalMetadata: RetrievalMetadata;
   sources: Array<{
     chunkId: string;
@@ -55,7 +67,7 @@ export type StructuredChatResponse = {
   }>;
   model: string;
   tokensUsed?: number;
-  /** @deprecated Use lectureContent */
+  /** @deprecated Use directAnswer or lectureContent */
   lectureAnswer?: string;
   /** @deprecated Use additionalExplanation + generalKnowledge */
   explanation?: string;
@@ -515,29 +527,50 @@ export const chatStructuredService = {
         geminiLatencyMs: pipelineLatencyMs,
       };
 
+      let confidenceDisplayLabel: string;
+      let confidenceReason: string;
+
+      if (analysis.coverage === 'strong' && confidence >= 0.7) {
+        confidenceDisplayLabel = 'Based on lecture sources';
+        confidenceReason = 'High transcript match — explanation is fully grounded in video lecture context.';
+      } else if (analysis.coverage === 'partial' || (confidence >= 0.4 && confidence < 0.7)) {
+        confidenceDisplayLabel = 'Partially supported by lecture';
+        confidenceReason = 'Partial transcript match — grounded in lecture cues with supplementary general knowledge.';
+      } else {
+        confidenceDisplayLabel = 'General explanation';
+        confidenceReason = 'The lecture does not provide enough detail for this question, so general educational knowledge was used.';
+      }
+
       return {
         mode: responseMode,
-        summary: parsed.summary,
-        lectureContent: parsed.lectureContent,
-        additionalExplanation: parsed.additionalExplanation,
-        generalKnowledge: parsed.generalKnowledge,
-        keyTakeaways: parsed.keyTakeaways,
+        directAnswer: formatted.directAnswer,
+        summary: formatted.directAnswer || formatted.summary,
+        lectureContent: formatted.explanation || formatted.lectureContent,
+        additionalExplanation: formatted.technicalInsight || formatted.additionalExplanation,
+        generalKnowledge: formatted.generalKnowledge,
+        steps: formatted.steps,
+        technicalInsight: formatted.technicalInsight,
+        applications: formatted.applications,
+        keyTakeaways: formatted.keyTakeaways,
+        sections: formatted.sections,
         lectureRelatedTopics,
         suggestedRelatedTopics,
         relatedTopics: [...lectureRelatedTopics, ...suggestedRelatedTopics],
         coverage: analysis.coverage,
         confidence,
         confidenceLabel,
+        confidenceDisplayLabel,
+        confidenceReason,
         citations,
         sources,
         retrievalMetadata,
         model: formatted.model,
         tokensUsed: formatted.tokensUsed,
-        lectureAnswer: parsed.lectureContent,
-        explanation: [parsed.lectureContent, parsed.additionalExplanation, parsed.generalKnowledge]
+        lectureAnswer: formatted.explanation || formatted.lectureContent,
+        explanation: [formatted.directAnswer, formatted.explanation, formatted.technicalInsight]
           .filter(Boolean)
           .join('\n\n'),
-        keyPoints: parsed.keyTakeaways,
+        keyPoints: formatted.keyTakeaways,
         confidenceScore: confidence,
       };
     });

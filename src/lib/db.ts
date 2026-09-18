@@ -225,6 +225,15 @@ export type ChatHistoryRow = {
   deleted?: boolean;
 };
 
+export type PersonalNoteRow = {
+  id: string;
+  userId?: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export class StudyflowDB extends Dexie {
   transcripts!: Table<TranscriptRow, string>;
   semanticChunks!: Table<SemanticChunkRow, string>;
@@ -238,6 +247,7 @@ export class StudyflowDB extends Dexie {
   analytics!: Table<AnalyticsRow, string>;
   chatHistory!: Table<ChatHistoryRow, string>;
   transcriptTranslations!: Table<TranscriptTranslationRow, string>;
+  personalNotes!: Table<PersonalNoteRow, string>;
 
   constructor() {
     super('yt-studyflow');
@@ -300,6 +310,22 @@ export class StudyflowDB extends Dexie {
       analytics: 'id, videoId, kind, createdAt',
       chatHistory: 'id, videoId, role, createdAt, updatedAt, remoteId, dirty',
       transcriptTranslations: 'id, videoId, targetLanguage, updatedAt',
+    });
+
+    this.version(5).stores({
+      transcripts: 'id, videoId, updatedAt',
+      semanticChunks: 'id, videoId, playlistId, startTime, endTime, updatedAt',
+      embeddings: 'id, videoId, semanticChunkId, model, updatedAt',
+      playlists: 'id, updatedAt, remoteId, dirty',
+      studyPlans: 'id, playlistId, updatedAt, remoteId, dirty',
+      notes: 'id, videoId, playlistId, type, createdAt, updatedAt, isPinned, remoteId, dirty',
+      chapters: 'id, videoId, updatedAt',
+      flashcards: 'id, videoId, playlistId, nextReviewDate, difficulty, remoteId, dirty',
+      quizzes: 'id, videoId, mode, updatedAt, remoteId, dirty',
+      analytics: 'id, videoId, kind, createdAt',
+      chatHistory: 'id, videoId, role, createdAt, updatedAt, remoteId, dirty',
+      transcriptTranslations: 'id, videoId, targetLanguage, updatedAt',
+      personalNotes: 'id, userId, updatedAt',
     });
   }
 }

@@ -4,19 +4,35 @@ export type CoverageCase = 'strong' | 'partial' | 'none';
 export type ConfidenceLabel = 'high' | 'medium' | 'low';
 export type ResponseMode = 'lecture-grounded' | 'hybrid' | 'general-knowledge';
 
+export type ResponseSectionType = 'explanation' | 'steps' | 'technical' | 'application' | 'recap';
+
+export type ResponseSectionItem = {
+  title: string;
+  content: string;
+  type: ResponseSectionType;
+  items?: string[];
+};
+
 export type StructuredChatPayload = {
   mode: ResponseMode;
+  directAnswer?: string;
   summary: string;
   lectureContent: string;
   additionalExplanation: string;
   generalKnowledge: string;
+  steps?: string[];
+  technicalInsight?: string;
+  applications?: string[];
   keyTakeaways: string[];
+  sections?: ResponseSectionItem[];
   lectureRelatedTopics: string[];
   suggestedRelatedTopics: string[];
   coverage: CoverageCase;
   confidence: number;
   confidenceLabel: ConfidenceLabel;
-  /** @deprecated Use lectureContent */
+  confidenceDisplayLabel?: string;
+  confidenceReason?: string;
+  /** @deprecated Use directAnswer or lectureContent */
   lectureAnswer?: string;
   /** @deprecated Use additionalExplanation + generalKnowledge */
   explanation?: string;

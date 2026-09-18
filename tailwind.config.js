@@ -34,28 +34,27 @@ export default {
           contrast: '#ffffff',
         },
 
-        // ---- Surfaces (one dark language) ----
-        // base < base, surface (panel), raised (card), overlay (popover)
-        base: '#09090b', // zinc-950-ish, not pure black
+        // ---- Surfaces (dynamic light/dark) ----
+        base: 'var(--color-base, #09090b)',
         surface: {
-          DEFAULT: '#101013', // panel background (slightly lighter than base)
-          raised: '#161619', // card / elevated surface
-          overlay: '#1c1c20', // popovers, tooltips, hover
+          DEFAULT: 'var(--color-surface, #101013)',
+          raised: 'var(--color-surface-raised, #161619)',
+          overlay: 'var(--color-surface-overlay, #1c1c20)',
         },
 
-        // ---- Text ----
+        // ---- Text (dynamic light/dark) ----
         content: {
-          DEFAULT: '#f4f4f5', // zinc-100, primary text
-          muted: '#a1a1aa', // zinc-400, secondary text
-          subtle: '#71717a', // zinc-500, captions / labels
-          faint: '#52525b', // zinc-600, disabled / hint (use sparingly)
+          DEFAULT: 'var(--color-content, #f4f4f5)',
+          muted: 'var(--color-content-muted, #a1a1aa)',
+          subtle: 'var(--color-content-subtle, #71717a)',
+          faint: 'var(--color-content-faint, #52525b)',
         },
 
-        // ---- Border ----
+        // ---- Border (dynamic light/dark) ----
         line: {
-          DEFAULT: 'rgba(255,255,255,0.08)',
-          strong: 'rgba(255,255,255,0.14)',
-          soft: 'rgba(255,255,255,0.05)',
+          DEFAULT: 'var(--color-line, rgba(255,255,255,0.08))',
+          strong: 'var(--color-line-strong, rgba(255,255,255,0.15))',
+          soft: 'var(--color-line-soft, rgba(255,255,255,0.04))',
         },
 
         // ---- Status (semantic, unified) ----
@@ -98,10 +97,10 @@ export default {
         display: ['1.5rem', { lineHeight: '1.25', letterSpacing: '-0.02em', fontWeight: '700' }],
         heading: ['1.125rem', { lineHeight: '1.35', letterSpacing: '-0.01em', fontWeight: '600' }],
         subheading: ['1rem', { lineHeight: '1.45', letterSpacing: '-0.005em', fontWeight: '600' }],
-        body: ['0.875rem', { lineHeight: '1.6', fontWeight: '400' }],
-        caption: ['0.75rem', { lineHeight: '1.5', fontWeight: '400' }],
-        label: ['0.6875rem', { lineHeight: '1.4', fontWeight: '500', letterSpacing: '0.02em' }],
-        micro: ['0.625rem', { lineHeight: '1.3', fontWeight: '500', letterSpacing: '0.04em' }],
+        body: ['0.9375rem', { lineHeight: '1.65', fontWeight: '400' }], // 15px
+        caption: ['0.8125rem', { lineHeight: '1.5', fontWeight: '400' }], // 13px
+        label: ['0.75rem', { lineHeight: '1.4', fontWeight: '500', letterSpacing: '0.02em' }], // 12px
+        micro: ['0.6875rem', { lineHeight: '1.3', fontWeight: '500', letterSpacing: '0.04em' }], // 11px
       },
 
       // ---- Spacing scale (4,8,12,16,20,24,32,40,48) ----

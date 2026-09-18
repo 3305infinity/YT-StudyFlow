@@ -99,6 +99,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   ...emptyState,
 
   setVideoId: (videoId) => {
+    if (!videoId) return;
+    const state = get();
+    if (state.currentVideoId === videoId) {
+      if (state.status === 'success' && state.chunks.length > 0) return;
+      if (state.status === 'loading') return;
+    }
     set({ currentVideoId: videoId, ...emptyState });
   },
 

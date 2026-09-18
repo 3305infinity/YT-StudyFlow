@@ -137,7 +137,7 @@ export const ragService = {
           id: h.id,
           score: h.score,
           metadata: h.metadata,
-          values: undefined,
+          values: h.values,
         }));
       } else {
         try {
@@ -153,12 +153,13 @@ export const ragService = {
               },
               queryText: retrievalQuery,
             }),
-            { timeoutMs: 5000, serviceName: 'pinecone' }
+            { timeoutMs: 12000, serviceName: 'pinecone' }
           );
           const retrievalResults: RetrievalResult[] = vectorHits.map((h) => ({
             id: h.id,
             score: h.score,
             metadata: h.metadata,
+            values: h.values,
           }));
           cacheManager.setRetrieval(retrievalQuery, params.videoId, retrievalResults, params.playlistId);
         } catch (error) {

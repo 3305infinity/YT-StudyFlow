@@ -1,25 +1,13 @@
-import { GEMINI, VECTOR_SEARCH } from '@lib/constants';
+import { VECTOR_SEARCH } from '@lib/constants';
 import { DbIds, ensureDbReady, getDb, nowMs } from '@lib/db';
 import type { Note, NoteType } from '@/types/notes';
 import type { SemanticChunk } from '@/types/ai';
 import { canUseGeminiApi, getSettings } from '@lib/storage';
-import { createGeminiService } from '@/features/ai/gemini.service';
-import { buildNotesPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localNotes } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
 import { scheduleSync, syncVideoScope } from '@/lib/sync/engine';
 import { getCurrentVideoId } from '@lib/youtube';
-
-function formatContext(chunks: SemanticChunk[], includeTimestamps: boolean): string {
-  return chunks
-    .slice(0, 40)
-    .map((c) =>
-      includeTimestamps
-        ? `[${Math.floor(c.startTime)}s] ${c.text}`
-        : c.text
-    )
-    .join('\n\n');
-}
+import { api } from '@/lib/api/client';
 
 export async function generateNote(params: {
   videoId: string;
@@ -58,35 +46,37 @@ export async function generateNote(params: {
     content = local.content;
   } else {
   try {
-    const gemini = await createGeminiService();
     const settings = await getSettings();
     if (stale()) throw new Error('Video changed during note generation');
-    const context = formatContext(contextChunks, includeTimestamps);
-    const { system, user } = buildNotesPrompt({
-      mode: params.type,
+    
+    const structuredResp = await api.post<{
+      directAnswer?: string;
+      lectureContent?: string;
+      summary?: string;
+      explanation?: string;
+      keyTakeaways?: string[];
+    }>('/api/chat/structured', {
+      question: `Generate comprehensive ${params.type} study notes for ${params.videoTitle ?? 'this lecture'}`,
+      videoId: params.videoId,
       videoTitle: params.videoTitle,
-      context,
-      includeTimestamps,
+      mode: 'concise',
       language: settings.responseLanguage,
-    });
-
-    const resp = await gemini.generateText({
-      model: GEMINI.CHAT_MODEL,
-      prompt: { system, user },
-      config: {
-        temperature: 0.35,
-        maxOutputTokens: params.type === 'interview' || params.type === 'detailed' ? 2000 : 1400,
-      },
+      chunks: contextChunks.map((c) => ({
+        id: c.id,
+        text: c.text,
+        startTime: c.startTime,
+        endTime: c.endTime,
+        videoId: c.videoId ?? '',
+      })),
     });
 
     if (stale()) throw new Error('Video changed during note generation');
 
-    const parsed = parseJson<{ title: string; content: string; tags: string[] }>(resp.content);
-    if (parsed?.title) title = parsed.title.trim();
-    if (parsed?.content) content = parsed.content.trim();
-    if (parsed?.tags) tags = parsed.tags;
+    title = `${params.type.toUpperCase()} - ${params.videoTitle ?? 'Lecture Notes'}`;
+    content = structuredResp.explanation || structuredResp.lectureContent || structuredResp.directAnswer || structuredResp.summary || content;
+    tags = [params.type, 'groq-tutor'];
   } catch (e) {
-    console.warn('[YT StudyFlow] Gemini notes failed — using local', e);
+    console.warn('[YT StudyFlow] Groq notes generation failed — using local fallback', e);
     if (stale()) throw new Error('Video changed during note generation');
     const local = localNotes(params.type, contextChunks, params.videoTitle);
     title = local.title;

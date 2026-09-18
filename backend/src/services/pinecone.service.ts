@@ -95,28 +95,22 @@ export const pineconeService = {
 
 
   async upsertChunks(params: {
-
     userId: string;
-
     videoId: string;
-
     chunks: Array<VectorChunk & { embedding: number[] }>;
-
   }): Promise<void> {
-
-    if (!params.chunks.length) return;
+    const validChunks = params.chunks.filter(
+      (c) => Array.isArray(c.embedding) && c.embedding.length > 0
+    );
+    if (!validChunks.length) return;
 
     await withRetry(async () => {
-
       const pc = getClient();
-
       const index = pc.index(env.pineconeIndex);
-
       const namespace = pineconeNamespace(params.userId, params.videoId);
 
       await index.namespace(namespace).upsert(
-
-        params.chunks.map((c) => {
+        validChunks.map((c) => {
           const record: {
             id: string;
             values: number[];
@@ -137,11 +131,8 @@ export const pineconeService = {
 
           return record;
         })
-
       );
-
     }, { label: 'pinecone.upsert' });
-
   },
 
 

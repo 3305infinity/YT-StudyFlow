@@ -60,8 +60,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
         key={`ul-${nodes.length}`}
         className={
           isNotes
-            ? 'my-3 ml-5 list-disc space-y-2 text-body leading-[1.7] text-content-muted marker:text-brand/70'
-            : 'my-3 ml-5 list-disc space-y-2 text-body leading-[1.7] text-content-muted marker:text-brand/70'
+            ? 'my-3 ml-5 list-disc space-y-2 text-[15px] leading-[1.7] text-content-muted marker:text-brand/70'
+            : 'my-3 ml-5 list-disc space-y-2 text-[15px] leading-[1.7] text-content-muted marker:text-brand/70'
         }
       >
         {listItems.map((item, i) => (
@@ -93,8 +93,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'mb-2 mt-5 text-caption font-semibold uppercase tracking-wide text-content-muted'
-              : 'mb-2 mt-4 text-caption font-semibold uppercase tracking-wide text-content-muted'
+              ? 'mb-2 mt-5 text-[13px] font-semibold uppercase tracking-wider text-content-muted'
+              : 'mb-2 mt-4 text-[13px] font-semibold uppercase tracking-wider text-content-muted'
           }
         >
           {inlineFormat(trimmed.slice(5))}
@@ -106,8 +106,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'mb-2 mt-6 border-b border-line pb-1.5 text-subheading font-semibold text-content'
-              : 'mb-2 mt-5 text-subheading font-semibold text-content'
+              ? 'mb-2 mt-6 border-b border-line pb-1.5 text-[16px] font-semibold text-content'
+              : 'mb-2 mt-5 text-[16px] font-semibold text-content'
           }
         >
           {inlineFormat(trimmed.slice(4))}
@@ -143,7 +143,7 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
       nodes.push(
         <blockquote
           key={nodes.length}
-          className="my-3 rounded-r-md border-l-2 border-brand/40 bg-brand/[0.06] py-2.5 pl-4 pr-3 text-body leading-[1.7] text-content-muted"
+          className="my-3 rounded-r-md border-l-2 border-brand/40 bg-brand/[0.06] py-2.5 pl-4 pr-3 text-[15px] leading-[1.7] text-content-muted"
         >
           {inlineFormat(trimmed.slice(2))}
         </blockquote>
@@ -154,8 +154,8 @@ export function MarkdownView({ content, variant = 'default' }: { content: string
           key={nodes.length}
           className={
             isNotes
-              ? 'my-2.5 text-body leading-[1.75] text-content-muted'
-              : 'my-2.5 text-body leading-[1.75] text-content-muted'
+              ? 'my-2.5 text-[15px] leading-[1.75] text-content-muted'
+              : 'my-2.5 text-[15px] leading-[1.75] text-content-muted'
           }
         >
           {inlineFormat(trimmed)}

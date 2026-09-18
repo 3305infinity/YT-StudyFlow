@@ -100,12 +100,16 @@ export const geminiService = {
     const model = input.model || GEMINI_DEFAULTS.embeddingModel;
     const taskType = input.taskType ?? 'RETRIEVAL_DOCUMENT';
     const modelPath = `models/${model}`;
+    const startTime = Date.now();
+
     logDev('embedTexts:init', {
       model,
       taskType,
       inputCount: input.input.length,
       totalChars: input.input.reduce((sum, text) => sum + text.length, 0),
     });
+
+    let embeddings: number[][];
 
     if (input.input.length === 1) {
       const result = await geminiPost(`/models/${encodeURIComponent(model)}:embedContent`, {
@@ -115,19 +119,30 @@ export const geminiService = {
       });
       const text = assertOkResponse(result);
       const data = parseJsonBody<Record<string, unknown>>(text);
-      return { model, embeddings: [extractSingleEmbedding(data)] };
+      embeddings = [extractSingleEmbedding(data)];
+    } else {
+      const result = await geminiPost(`/models/${encodeURIComponent(model)}:batchEmbedContents`, {
+        requests: input.input.map((text) => ({
+          model: modelPath,
+          content: { parts: [{ text }] },
+          taskType,
+        })),
+      });
+      const text = assertOkResponse(result);
+      const data = parseJsonBody<Record<string, unknown>>(text);
+      embeddings = extractBatchEmbeddings(data, input.input.length);
     }
 
-    const result = await geminiPost(`/models/${encodeURIComponent(model)}:batchEmbedContents`, {
-      requests: input.input.map((text) => ({
-        model: modelPath,
-        content: { parts: [{ text }] },
-        taskType,
-      })),
+    const latencyMs = Date.now() - startTime;
+    logDev('embedTexts', {
+      model,
+      dimensions: embeddings[0]?.length ?? 3072,
+      inputCount: input.input.length,
+      latencyMs,
+      status: 'success',
     });
-    const text = assertOkResponse(result);
-    const data = parseJsonBody<Record<string, unknown>>(text);
-    return { model, embeddings: extractBatchEmbeddings(data, input.input.length) };
+
+    return { model, embeddings };
   },
 
   async checkHealth(): Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> {

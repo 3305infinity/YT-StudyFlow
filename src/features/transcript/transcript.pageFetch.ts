@@ -5,6 +5,7 @@
 import { TRANSCRIPT_TRANSPORT } from '@lib/constants';
 
 const TRANSPORT_READY = 'YT_STUDYFLOW_PAGE_TRANSPORT_READY';
+const TRANSPORT_PING = 'YT_STUDYFLOW_PING_TRANSPORT';
 const GET_CAPTURED = 'YT_STUDYFLOW_GET_CAPTURED_CAPTIONS';
 const CAPTURED_RESULT = 'YT_STUDYFLOW_CAPTURED_CAPTIONS';
 
@@ -14,6 +15,7 @@ export type PageFetchResult = {
   text: string;
   contentType: string;
   error?: string;
+  elapsedMs?: number;
 };
 
 export type CapturedCaption = {
@@ -23,18 +25,28 @@ export type CapturedCaption = {
   ts: number;
 };
 
-function waitForTransport(maxMs = 4000): Promise<boolean> {
-  const w = window as Window & { __ytStudyFlowTransportReady?: boolean };
-  if (w.__ytStudyFlowTransportReady) return Promise.resolve(true);
+let isTransportReady = false;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (ev: MessageEvent) => {
+    if ((ev.data as { type?: string })?.type === TRANSPORT_READY) {
+      isTransportReady = true;
+    }
+  });
+}
+
+function waitForTransport(maxMs = 800): Promise<boolean> {
+  if (isTransportReady) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       window.removeEventListener('message', onReady);
-      resolve(!!w.__ytStudyFlowTransportReady);
+      resolve(isTransportReady);
     }, maxMs);
 
     const onReady = (ev: MessageEvent) => {
       if ((ev.data as { type?: string })?.type === TRANSPORT_READY) {
+        isTransportReady = true;
         clearTimeout(timer);
         window.removeEventListener('message', onReady);
         resolve(true);
@@ -42,10 +54,15 @@ function waitForTransport(maxMs = 4000): Promise<boolean> {
     };
 
     window.addEventListener('message', onReady);
+    window.postMessage({ type: TRANSPORT_PING }, '*');
   });
 }
 
-export async function fetchViaPageTransport(url: string): Promise<PageFetchResult> {
+export async function fetchViaPageTransport(
+  url: string,
+  timeoutMs = 10000
+): Promise<PageFetchResult> {
+  const startTime = performance.now();
   await waitForTransport();
 
   const requestToken = `tt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -66,12 +83,14 @@ export async function fetchViaPageTransport(url: string): Promise<PageFetchResul
 
       window.removeEventListener('message', onMessage);
       clearTimeout(timer);
+      const elapsedMs = Math.round(performance.now() - startTime);
       resolve({
         ok: !!data.ok,
         status: Number(data.status ?? 0),
         text: String(data.responseText ?? ''),
         contentType: String(data.contentType ?? ''),
         error: data.error,
+        elapsedMs,
       });
     };
 
@@ -79,8 +98,16 @@ export async function fetchViaPageTransport(url: string): Promise<PageFetchResul
 
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', onMessage);
-      resolve({ ok: false, status: 0, text: '', contentType: '', error: 'timeout' });
-    }, TRANSCRIPT_TRANSPORT.TIMEOUT_MS);
+      const elapsedMs = Math.round(performance.now() - startTime);
+      resolve({
+        ok: false,
+        status: 0,
+        text: '',
+        contentType: '',
+        error: `Page transport timed out after ${timeoutMs}ms`,
+        elapsedMs,
+      });
+    }, timeoutMs);
 
     window.postMessage(
       { type: TRANSCRIPT_TRANSPORT.FETCH, requestToken, url },
@@ -95,10 +122,6 @@ export async function fetchViaPageContext(
   body?: string,
   extraHeaders?: Record<string, string>
 ): Promise<PageFetchResult> {
-  if (method === 'GET' && !extraHeaders) {
-    return fetchViaPageTransport(url);
-  }
-
   try {
     const result = (await chrome.runtime.sendMessage({
       type: 'YT_STUDYFLOW_PAGE_FETCH',

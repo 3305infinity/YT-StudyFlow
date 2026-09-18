@@ -265,63 +265,44 @@ export async function fetchCaptionText(url: string, signal?: AbortSignal): Promi
 
 
 export async function fetchCaptionTextWithFormats(baseUrl: string, signal?: AbortSignal): Promise<{
-
   ok: boolean;
-
   text: string;
-
   contentType: string;
-
   via?: string;
-
 }> {
-
   const captured = await fetchFromCapturedCache(baseUrl);
-
   if (captured.ok) return captured;
 
-
-
   const decoded = decodeTrackUrl(baseUrl);
+  
+  // 1. Try exact signed URL from YouTube player response first
+  const directResult = await fetchCaptionText(decoded, signal);
+  if (directResult.ok && directResult.text && looksLikeTranscriptPayload(directResult.text, directResult.contentType)) {
+    return directResult;
+  }
 
-  const urls = new Set<string>([decoded]);
-
-
-
+  // 2. Fallback to format variants only if original signed URL failed
+  const altUrls = new Set<string>();
   for (const fmt of ['json3', 'vtt', 'srv3'] as const) {
-
-    urls.add(normalizeCaptionUrl(baseUrl, fmt));
-
+    const norm = normalizeCaptionUrl(baseUrl, fmt);
+    if (norm !== decoded) altUrls.add(norm);
   }
 
-
-
-  for (const url of urls) {
-
+  for (const url of altUrls) {
     const result = await fetchCaptionText(url, signal);
-
     if (result.ok && result.text && looksLikeTranscriptPayload(result.text, result.contentType)) {
-
       return result;
-
     }
-
   }
-
-
 
   return { ok: false, text: '', contentType: '' };
-
 }
 
 
 
 export async function waitForCapturedCaptions(
-
   baseUrl: string,
-
-  maxWaitMs = 8000
-
+  maxWaitMs = 1200
 ): Promise<{ ok: boolean; text: string; contentType: string; via?: string }> {
 
   await triggerPlayerCaptions();

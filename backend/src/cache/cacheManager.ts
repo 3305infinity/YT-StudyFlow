@@ -33,6 +33,7 @@ export type RetrievalResult = {
   id: string;
   score: number;
   metadata: Record<string, unknown>;
+  values?: number[];
 };
 
 export class CacheManager {

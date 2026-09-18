@@ -40,7 +40,7 @@ function getOrCreateHost(): HTMLElement {
   host.id = HOST_ID;
   host.style.cssText = `
     position: fixed;
-    top: 50%;
+    top: 0;
     right: 0;
     width: ${UI.SIDEBAR_WIDTH}px;
     height: 100vh;
@@ -48,16 +48,21 @@ function getOrCreateHost(): HTMLElement {
     border: none;
     margin: 0;
     padding: 0;
-    background: linear-gradient(180deg, #0a0f1a 0%, #0b1220 40%, #0d1528 100%);
+    background: #0b0f19;
     pointer-events: auto;
-    transform: translateY(-50%);
-    transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1),
-                border-radius 300ms cubic-bezier(0.4, 0, 0.2, 1),
-                box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    transition: top 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                right 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                width 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                height 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                border-radius 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                background 320ms cubic-bezier(0.16, 1, 0.3, 1);
   `;
 
   document.body.appendChild(host);
   installSidebarKeyboardIsolation();
+  toggleSuggestedVideosAndExpandPlayer(true);
   return host;
 }
 
@@ -111,30 +116,87 @@ function buildShadowRoot(host: HTMLElement): HTMLElement {
   return container;
 }
 
-function adjustYouTubeLayout(show: boolean): void {
+function toggleSuggestedVideosAndExpandPlayer(expanded: boolean): void {
   const app = document.querySelector('ytd-app');
-  if (!(app instanceof HTMLElement)) return;
-  app.style.marginRight = show ? `${UI.SIDEBAR_WIDTH}px` : '0';
-  app.style.transition = `margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1)`;
+  const secondary = document.querySelector('#secondary') as HTMLElement | null;
+
+  let styleTag = document.getElementById('yt-studyflow-layout-style');
+  if (!styleTag) {
+    styleTag = document.createElement('style');
+    styleTag.id = 'yt-studyflow-layout-style';
+    document.head.appendChild(styleTag);
+  }
+
+  if (expanded) {
+    if (secondary) {
+      secondary.style.display = 'none';
+    }
+    if (app instanceof HTMLElement) {
+      app.style.marginRight = `${UI.SIDEBAR_WIDTH}px`;
+      app.style.transition = 'margin-right 320ms cubic-bezier(0.16, 1, 0.3, 1)';
+    }
+
+    styleTag.textContent = `
+      ytd-app {
+        margin-right: ${UI.SIDEBAR_WIDTH}px !important;
+      }
+      ytd-watch-flexy[flexy] #primary.ytd-watch-flexy,
+      ytd-watch-flexy[flexy] #primary-inner.ytd-watch-flexy {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      ytd-watch-flexy[flexy] #player-container-outer.ytd-watch-flexy,
+      ytd-watch-flexy[flexy] #player-container-inner.ytd-watch-flexy,
+      ytd-watch-flexy[flexy] #player-container.ytd-watch-flexy,
+      ytd-watch-flexy[flexy] #player.ytd-watch-flexy {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      #secondary {
+        display: none !important;
+      }
+    `;
+  } else {
+    if (secondary) {
+      secondary.style.display = '';
+    }
+    if (app instanceof HTMLElement) {
+      app.style.marginRight = '0';
+      app.style.transition = 'margin-right 320ms cubic-bezier(0.16, 1, 0.3, 1)';
+    }
+    styleTag.textContent = '';
+  }
+
+  setTimeout(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, 60);
 }
 
 export function collapseSidebar(): void {
   const host = getHost();
   if (!host || sidebarCollapsed) return;
-  host.style.width = '56px';
-  host.style.borderRadius = '16px 0 0 16px';
-  host.style.boxShadow = '-4px 0 24px rgba(0,0,0,0.5)';
-  adjustYouTubeLayout(false);
+  host.style.top = '72px';
+  host.style.right = '18px';
+  host.style.width = '48px';
+  host.style.height = '48px';
+  host.style.borderRadius = '24px';
+  host.style.background = 'transparent';
+  host.style.boxShadow = '0 8px 24px rgba(168, 85, 247, 0.4), 0 4px 12px rgba(0,0,0,0.6)';
+  toggleSuggestedVideosAndExpandPlayer(false);
   sidebarCollapsed = true;
 }
 
 export function expandSidebar(): void {
   const host = getHost();
   if (!host || !sidebarCollapsed) return;
+  host.style.top = '0';
+  host.style.right = '0';
   host.style.width = `${UI.SIDEBAR_WIDTH}px`;
+  host.style.height = '100vh';
   host.style.borderRadius = '0';
-  host.style.boxShadow = 'none';
-  adjustYouTubeLayout(true);
+  host.style.background = '#0b0f19';
+  host.style.boxShadow = '-8px 0 32px rgba(0, 0, 0, 0.5)';
+  toggleSuggestedVideosAndExpandPlayer(true);
   sidebarCollapsed = false;
 }
 
@@ -233,5 +295,5 @@ export function removeSidebar(): void {
   activeVideoId = null;
   removeSidebarKeyboardIsolation();
   document.getElementById(HOST_ID)?.remove();
-  adjustYouTubeLayout(false);
+  toggleSuggestedVideosAndExpandPlayer(false);
 }

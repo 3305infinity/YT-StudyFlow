@@ -1,32 +1,25 @@
-import { geminiService } from '../gemini.service.js';
+import { groqService } from '../groq.service.js';
 import { ragDevLog } from '../rag/devLog.js';
 
-export type IntentAnalysis = {
-  intent: string;
-  targetConcept: string;
-  difficulty: string;
-  expectedOutput: string;
-};
-
-export type EvidenceSelection = {
-  concept: string;
-  supportingChunks: string[];
-  confidence: string;
-};
-
-export type GeneratedAnswer = {
+export type ResponseSectionItem = {
+  title: string;
   content: string;
-  additionalExplanation: string;
-  generalKnowledge: string;
-  keyTakeaways: string[];
+  type: 'explanation' | 'steps' | 'technical' | 'application' | 'recap';
+  items?: string[];
 };
 
 export type FormattedResponse = {
+  directAnswer: string;
   summary: string;
+  explanation: string;
   lectureContent: string;
+  steps: string[];
+  technicalInsight: string;
   additionalExplanation: string;
+  applications: string[];
   generalKnowledge: string;
   keyTakeaways: string[];
+  sections: ResponseSectionItem[];
   suggestedRelatedTopics: string[];
   intent: string;
   targetConcept: string;
@@ -36,10 +29,68 @@ export type FormattedResponse = {
 
 const CHUNK_SEPARATOR = '\n---\n';
 
+const AI_TUTOR_SYSTEM_INSTRUCTION = `You are the AI tutor inside YT StudyFlow.
+
+Your job is to answer the student's question clearly, accurately, and naturally.
+
+You may receive transcript context from the current YouTube lecture.
+
+Use the transcript when it is relevant and useful.
+
+Important rules:
+
+1. If the transcript contains the answer, prioritize the transcript.
+2. If the transcript only partially answers the question, use the transcript plus your general knowledge to complete the explanation.
+3. If the transcript does not contain the answer, answer using your general knowledge.
+4. Never invent information and attribute it to the lecture.
+5. Never claim that general knowledge came from the transcript.
+6. Answer the student's actual question directly.
+7. Explain difficult concepts simply while keeping important technical terminology.
+8. Avoid unnecessary analogies.
+9. Do not repeat the transcript verbatim unless a short quote is genuinely useful.
+10. Do not expose retrieval scores, similarity scores, chunk IDs, embeddings, Pinecone metadata, or internal system information.
+11. Do not output internal labels such as "confidence", "retrieval score", "general explanation", or "hybrid explanation".
+12. Do not use excessive headings.
+13. Do not begin with generic phrases such as "Welcome" or "Let's dive in".
+14. Do not repeat the question.
+15. Do not produce incomplete sentences or truncated responses.
+16. Keep the response proportional to the question.
+17. For simple questions, give a concise answer.
+18. For conceptual questions, explain the concept with a short explanation followed by useful details.
+19. If the student asks for a summary, actually summarize the main ideas instead of copying transcript sentences.
+20. If the student asks for 3 points, provide exactly 3 meaningful points.`;
+
 function buildChunkContext(chunks: Array<{ text: string; startTime: number; endTime: number }>): string {
+  if (!chunks.length) return '';
   return chunks
-    .map((c, i) => `[Chunk ${i + 1}] ${c.text}`)
+    .map((c, i) => `[Timestamp: ${Math.floor(c.startTime / 60)}:${String(Math.floor(c.startTime % 60)).padStart(2, '0')}] ${c.text}`)
     .join(CHUNK_SEPARATOR);
+}
+
+function validateGroqResponse(content: string): { valid: boolean; reason?: string } {
+  if (!content || content.trim().length === 0) {
+    return { valid: false, reason: 'Empty content string' };
+  }
+  const lower = content.toLowerCase();
+  if (lower.includes('<svg') || lower.includes('[svg]')) {
+    return { valid: false, reason: 'Contains raw SVG code' };
+  }
+  if (
+    lower.includes('retrieval score') ||
+    lower.includes('similarity score') ||
+    lower.includes('candidatechunks') ||
+    lower.includes('mmrchunks') ||
+    lower.includes('pinecone')
+  ) {
+    return { valid: false, reason: 'Contains internal RAG/Pinecone metadata' };
+  }
+  // Check for unfinished sentence at end
+  const trimmed = content.trim();
+  const lastChar = trimmed.slice(-1);
+  if (!['.', '!', '?', ')', '`', '"', "'"].includes(lastChar) && trimmed.length > 100) {
+    return { valid: false, reason: 'Appears truncated or incomplete at sentence boundary' };
+  }
+  return { valid: true };
 }
 
 export async function runAnswerGenerationPipeline(params: {
@@ -49,298 +100,140 @@ export async function runAnswerGenerationPipeline(params: {
   coverage: string;
   language?: string;
 }): Promise<FormattedResponse> {
-  const { question, chunks, mode, coverage } = params;
+  const { question, chunks, coverage } = params;
   const chunkContext = buildChunkContext(chunks);
 
-  ragDevLog('pipeline:start', {
-    question,
-    mode,
-    coverage,
+  const answerSource = coverage === 'strong' ? 'transcript' : coverage === 'partial' ? 'mixed' : 'general';
+
+  ragDevLog('retrieval-complete', {
     chunkCount: chunks.length,
-    totalChunkChars: chunkContext.length,
+    coverage,
+    hasContext: !!chunkContext,
   });
 
-  const stage1 = await stage1IntentAnalysis(question, chunkContext, coverage);
-  ragDevLog('pipeline:intent-analysis', stage1);
+  ragDevLog('answer-source', answerSource);
 
-  const stage2 = await stage2EvidenceSelection(stage1, chunkContext);
-  ragDevLog('pipeline:evidence-selection', {
-    concept: stage2.concept,
-    confidence: stage2.confidence,
-    supportingChunkCount: stage2.supportingChunks.length,
-  });
+  const userPrompt = `Student Question: ${question}
 
-  const stage3 = await stage3AnswerGeneration(stage1, stage2);
-  ragDevLog('pipeline:answer-generated', {
-    contentLength: stage3.content.length,
-    additionalExplanationLength: stage3.additionalExplanation.length,
-    generalKnowledgeLength: stage3.generalKnowledge.length,
-    keyTakeawaysCount: stage3.keyTakeaways.length,
-  });
-
-  const stage4 = await stage4Formatting(stage1, stage2, stage3, coverage);
-  ragDevLog('pipeline:formatted', {
-    summaryLength: stage4.summary.length,
-    lectureContentLength: stage4.lectureContent.length,
-    keyTakeawaysCount: stage4.keyTakeaways.length,
-  });
-
-  return stage4;
+${
+  chunkContext
+    ? `Retrieved Lecture Transcript Context:\n${chunkContext}`
+    : `(Note: No relevant transcript content was found in the lecture for this specific question. Please answer naturally using your general knowledge.)`
 }
 
-async function stage1IntentAnalysis(
-  question: string,
-  chunkContext: string,
-  coverage: string
-): Promise<IntentAnalysis> {
-  const prompt = `You are an intent analyzer for a student question about lecture content.
+Please provide a direct, clean, well-formatted response to the student.`;
 
-Student question: ${question}
+  ragDevLog('groq:request', {
+    userPromptChars: userPrompt.length,
+    hasSystemInstruction: true,
+  });
 
-Retrieved lecture context:
-${chunkContext || '(no transcript chunks were retrieved)'}
-
-Analyze the question and context. Determine:
-1. intent: one of [explain, compare, interview, walkthrough, notes, quiz, exam-review]
-2. targetConcept: the specific concept the student wants explained. If the question asks for the "hardest concept", identify it from the retrieved context. If no clear hardest concept exists, say "The lecture does not clearly identify a hardest concept. The most complex topic appears to be..."
-3. difficulty: beginner, intermediate, or advanced
-4. expectedOutput: what format the answer should take
-
-Rules:
-- Never invent concepts not present in the retrieved context.
-- Choose the most central and technically complex concept if multiple exist.
-- If the retrieved context is empty, set targetConcept to "unknown" and expectedOutput to "general explanation".
-
-Return ONLY valid JSON. No markdown fences.
-{
-  "intent": "...",
-  "targetConcept": "...",
-  "difficulty": "...",
-  "expectedOutput": "..."
-}`;
-
-  const result = await geminiService.generateText({
-    model: 'gemini-3.5-flash',
-    prompt: { user: prompt },
-    config: {
-      temperature: 0.2,
-      maxOutputTokens: 500,
+  let groqResult = await groqService.generateText({
+    prompt: {
+      system: AI_TUTOR_SYSTEM_INSTRUCTION,
+      user: userPrompt,
     },
-  });
-
-  const trimmed = result.content.trim();
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  const candidate = jsonMatch?.[0] ?? trimmed;
-
-  try {
-    const parsed = JSON.parse(candidate) as Record<string, unknown>;
-    return {
-      intent: String(parsed.intent ?? 'explain'),
-      targetConcept: String(parsed.targetConcept ?? 'unknown'),
-      difficulty: String(parsed.difficulty ?? 'intermediate'),
-      expectedOutput: String(parsed.expectedOutput ?? 'explanation'),
-    };
-  } catch {
-    ragDevLog('pipeline:intent-parse-failed', { raw: trimmed.slice(0, 300) });
-    return {
-      intent: 'explain',
-      targetConcept: question,
-      difficulty: 'intermediate',
-      expectedOutput: 'explanation',
-    };
-  }
-}
-
-async function stage2EvidenceSelection(
-  stage1: IntentAnalysis,
-  chunkContext: string
-): Promise<EvidenceSelection> {
-  const prompt = `You are an evidence selector for a student question.
-
-Target concept: ${stage1.targetConcept}
-Student intent: ${stage1.intent}
-
-Retrieved lecture chunks:
-${chunkContext || '(no transcript chunks were retrieved)'}
-
-Identify which chunks best support the target concept. Return JSON:
-{
-  "concept": "refined concept name",
-  "supportingChunks": ["chunk text 1", "chunk text 2"],
-  "confidence": "high|medium|low"
-}
-
-Rules:
-- Only include chunks that directly support the concept.
-- supportingChunks must contain the EXACT text from the retrieved chunks above.
-- If no chunks clearly support the concept, return empty supportingChunks and low confidence.
-- Do not invent or paraphrase chunk content.
-
-Return ONLY valid JSON. No markdown fences.`;
-
-  const result = await geminiService.generateText({
-    model: 'gemini-3.5-flash',
-    prompt: { user: prompt },
-    config: {
-      temperature: 0.2,
-      maxOutputTokens: 800,
-    },
-  });
-
-  const trimmed = result.content.trim();
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  const candidate = jsonMatch?.[0] ?? trimmed;
-
-  try {
-    const parsed = JSON.parse(candidate) as Record<string, unknown>;
-    const supportingChunks = Array.isArray(parsed.supportingChunks)
-      ? parsed.supportingChunks.map(String).filter(Boolean)
-      : [];
-
-    return {
-      concept: String(parsed.concept ?? stage1.targetConcept),
-      supportingChunks,
-      confidence: String(parsed.confidence ?? supportingChunks.length ? 'medium' : 'low'),
-    };
-  } catch {
-    ragDevLog('pipeline:evidence-parse-failed', { raw: trimmed.slice(0, 300) });
-    return {
-      concept: stage1.targetConcept,
-      supportingChunks: [],
-      confidence: 'low',
-    };
-  }
-}
-
-async function stage3AnswerGeneration(
-  stage1: IntentAnalysis,
-  stage2: EvidenceSelection
-): Promise<GeneratedAnswer> {
-  const evidenceText = stage2.supportingChunks.length > 0
-    ? stage2.supportingChunks.join(CHUNK_SEPARATOR)
-    : 'No specific lecture context available. Use your knowledge to provide a helpful explanation.';
-
-  const prompt = `You are an expert teacher and AI tutor for YouTube lecture content.
-
-Target concept: ${stage1.targetConcept}
-Student intent: ${stage1.intent}
-Difficulty: ${stage1.difficulty}
-
-Supporting evidence from the lecture:
-${evidenceText}
-
-Generate a comprehensive educational answer. Focus on:
-- Clarity and simplicity
-- Concrete examples from the lecture when available
-- Analogies and intuition
-- Step-by-step reasoning where appropriate
-- Technical accuracy
-
-Write in plain text. Do NOT use JSON or markdown formatting.`;
-
-  const result = await geminiService.generateText({
-    model: 'gemini-3.5-flash',
-    prompt: { user: prompt },
     config: {
       temperature: 0.3,
-      maxOutputTokens: 2000,
+      maxOutputTokens: 1800,
     },
   });
 
-  const content = result.content.trim();
+  ragDevLog('groq:response', {
+    model: groqResult.model,
+    contentLength: groqResult.content.length,
+    tokensUsed: groqResult.tokensUsed,
+  });
+
+  // Response Validation
+  let validation = validateGroqResponse(groqResult.content);
+  if (!validation.valid) {
+    ragDevLog('groq:validation-failed', { reason: validation.reason, retrying: true });
+    
+    // Single retry with correction instruction
+    const retryUserPrompt = `${userPrompt}\n\nCorrection instruction: Your previous attempt failed validation (${validation.reason}). Please output clean, direct natural text with complete sentences and no internal debug/metadata output.`;
+    
+    groqResult = await groqService.generateText({
+      prompt: {
+        system: AI_TUTOR_SYSTEM_INSTRUCTION,
+        user: retryUserPrompt,
+      },
+      config: {
+        temperature: 0.2,
+        maxOutputTokens: 1800,
+      },
+    });
+
+    validation = validateGroqResponse(groqResult.content);
+    if (!validation.valid) {
+      ragDevLog('groq:retry-validation-warning', { reason: validation.reason });
+    }
+  }
+
+  return parseAndFormatResponse(question, groqResult.content, groqResult.model, groqResult.tokensUsed, coverage);
+}
+
+function parseAndFormatResponse(
+  question: string,
+  rawContent: string,
+  model: string,
+  tokensUsed: number | undefined,
+  coverage: string
+): FormattedResponse {
+  const cleaned = rawContent
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/\[svg[^\]]*\]/gi, '')
+    .replace(/^(welcome!?|hello!?|sure!?|great question!?)[,\s\-]*/i, '')
+    .trim();
+
+  const paragraphs = cleaned.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+
+  // Extract direct answer from first paragraph or line
+  const firstPara = paragraphs[0] || cleaned;
+  let directAnswer = firstPara.split('\n')[0] || firstPara;
+  if (directAnswer.length > 280) {
+    const endDot = directAnswer.indexOf('.', 100);
+    if (endDot > 0 && endDot < 280) {
+      directAnswer = directAnswer.slice(0, endDot + 1);
+    }
+  }
+
+  // Extract numbered steps if present
+  const stepLines = cleaned.split('\n').filter((l) => /^\s*\d+[\.\)]\s+/.test(l));
+  const steps = stepLines.map((l) => l.replace(/^\s*\d+[\.\)]\s+/, '').trim());
+
+  // Extract bullet key takeaways if present
+  const bulletLines = cleaned.split('\n').filter((l) => /^\s*[\-\*•]\s+/.test(l));
+  const keyTakeaways = bulletLines.map((l) => l.replace(/^\s*[\-\*•]\s+/, '').trim()).slice(0, 5);
+
+  // Build section items naturally if headings exist
+  const sections: ResponseSectionItem[] = [];
+  if (cleaned.length > 0) {
+    sections.push({
+      title: 'Explanation',
+      content: cleaned,
+      type: 'explanation',
+    });
+  }
 
   return {
-    content,
+    directAnswer,
+    summary: directAnswer,
+    explanation: cleaned,
+    lectureContent: coverage !== 'none' ? cleaned : '',
+    steps,
+    technicalInsight: '',
     additionalExplanation: '',
-    generalKnowledge: '',
-    keyTakeaways: [],
+    applications: [],
+    generalKnowledge: coverage === 'none' ? cleaned : '',
+    keyTakeaways,
+    sections,
+    suggestedRelatedTopics: [],
+    intent: 'explain',
+    targetConcept: question,
+    model,
+    tokensUsed,
   };
 }
 
-async function stage4Formatting(
-  stage1: IntentAnalysis,
-  stage2: EvidenceSelection,
-  stage3: GeneratedAnswer,
-  coverage: string
-): Promise<FormattedResponse> {
-  const coverageInstruction =
-    coverage === 'strong'
-      ? 'The retrieved transcript strongly covers this topic. Ground claims in the evidence.'
-      : coverage === 'partial'
-        ? 'The retrieved transcript partially covers this topic. Use the evidence as an anchor and fill gaps with background knowledge.'
-        : 'The lecture did not cover this topic. Provide the best answer using your knowledge. Never fabricate lecture quotes or timestamps.';
 
-  const prompt = `You are a formatter. Convert this educational answer into structured JSON.
-
-Answer: ${stage3.content}
-
-Student intent: ${stage1.intent}
-Coverage: ${coverage}
-${coverageInstruction}
-
-Return ONLY valid JSON. No markdown fences.
-{
-  "summary": "1-2 sentence overview of the answer",
-  "lectureContent": "the main educational answer",
-  "additionalExplanation": "background knowledge, analogies, simplified explanations, or worked examples",
-  "generalKnowledge": "standalone factual context, definitions, or broader context the student needs",
-  "keyTakeaways": ["specific study bullet 1", "specific study bullet 2", "specific study bullet 3"],
-  "suggestedRelatedTopics": ["next topic to study", "next topic to study"]
-}
-
-Rules:
-- summary must be 1-2 sentences, never a restatement of the question.
-- lectureContent must be the main answer, never empty, never just a summary.
-- additionalExplanation and generalKnowledge must both be non-empty. If the answer does not naturally contain these, generate appropriate background content.
-- keyTakeaways must have exactly 3-5 items, each a complete sentence. No generic bullets.
-- suggestedRelatedTopics must have 2-3 items.`;
-
-  const result = await geminiService.generateText({
-    model: 'gemini-3.5-flash',
-    prompt: { user: prompt },
-    config: {
-      temperature: 0.3,
-      maxOutputTokens: 1000,
-    },
-  });
-
-  const trimmed = result.content.trim();
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  const candidate = jsonMatch?.[0] ?? trimmed;
-
-  try {
-    const parsed = JSON.parse(candidate) as Record<string, unknown>;
-    return {
-      summary: String(parsed.summary ?? '').trim(),
-      lectureContent: String(parsed.lectureContent ?? stage3.content).trim(),
-      additionalExplanation: String(parsed.additionalExplanation ?? '').trim(),
-      generalKnowledge: String(parsed.generalKnowledge ?? '').trim(),
-      keyTakeaways: Array.isArray(parsed.keyTakeaways)
-        ? parsed.keyTakeaways.map(String).filter(Boolean)
-        : [],
-      suggestedRelatedTopics: Array.isArray(parsed.suggestedRelatedTopics)
-        ? parsed.suggestedRelatedTopics.map(String).filter(Boolean)
-        : [],
-      intent: stage1.intent,
-      targetConcept: stage1.targetConcept,
-      model: result.model,
-      tokensUsed: result.tokensUsed,
-    };
-  } catch {
-    ragDevLog('pipeline:format-parse-failed', { raw: trimmed.slice(0, 500) });
-
-    const sentences = stage3.content.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-    return {
-      summary: sentences.slice(0, 2).join('. ').trim() + '.',
-      lectureContent: stage3.content,
-      additionalExplanation: stage3.additionalExplanation || 'See the lecture content above for details.',
-      generalKnowledge: stage3.generalKnowledge || 'Refer to the course materials for additional context.',
-      keyTakeaways: stage3.keyTakeaways.length > 0 ? stage3.keyTakeaways : sentences.slice(0, 3).map((s) => s.trim()),
-      suggestedRelatedTopics: [],
-      intent: stage1.intent,
-      targetConcept: stage1.targetConcept,
-      model: result.model,
-      tokensUsed: result.tokensUsed,
-    };
-  }
-}

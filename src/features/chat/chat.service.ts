@@ -79,11 +79,11 @@ function mapApiResponse(response: StructuredApiResponse): {
   };
 
   const content =
-    response.summary ||
+    response.explanation ||
     lectureContent ||
     additionalExplanation ||
     generalKnowledge ||
-    response.explanation ||
+    response.summary ||
     'No response generated.';
 
   return { structured, content };

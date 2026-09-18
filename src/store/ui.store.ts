@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type WorkspaceTab = 'chat' | 'notes' | 'revision' | 'analytics';
+export type WorkspaceTab = 'chat' | 'transcript' | 'notes' | 'revision' | 'analytics';
 export type UtilityPanel = 'transcript' | 'settings' | 'export';
 export type SidebarTab = WorkspaceTab | UtilityPanel;
 
@@ -22,7 +22,7 @@ export const useUiStore = create<UiState>((set) => ({
   apiKeyBannerDismissed: false,
 
   setActiveTab: (tab) => {
-    if (tab === 'chat' || tab === 'notes' || tab === 'revision' || tab === 'analytics') {
+    if (tab === 'chat' || tab === 'transcript' || tab === 'notes' || tab === 'revision' || tab === 'analytics') {
       set({ activeTab: tab, utilityPanel: null });
     } else {
       set({ utilityPanel: tab });

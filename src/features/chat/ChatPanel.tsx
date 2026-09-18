@@ -65,7 +65,7 @@ const MessageBubble = memo(function MessageBubble({
         )}
       >
         {isUser ? (
-          <p className="text-body leading-relaxed">{msg.content}</p>
+          <p className="text-[15px] font-medium leading-relaxed">{msg.content}</p>
         ) : msg.structured ? (
           <StructuredAnswer
             structured={msg.structured}
@@ -75,12 +75,12 @@ const MessageBubble = memo(function MessageBubble({
             onJump={onJump}
           />
         ) : loading && !msg.content ? (
-          <div className="flex items-center gap-2 py-0.5 text-caption text-content-subtle">
+          <div className="flex items-center gap-2 py-0.5 text-xs text-content-subtle">
             <Loader />
             <span>Generating answer…</span>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap text-body leading-[1.7] text-content-muted">
+          <p className="whitespace-pre-wrap text-[15px] leading-[1.7] text-content-muted">
             {msg.content}
           </p>
         )}

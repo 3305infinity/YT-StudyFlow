@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { env, assertRuntimeConfig } from './config/env.js';
 import { GEMINI_API_BASE, GEMINI_DEFAULTS } from './services/gemini/gemini.config.js';
+import { verifyGroqPipelineStartup } from './testGroqStartup.js';
 
 assertRuntimeConfig();
 
@@ -16,6 +17,7 @@ const server = app.listen(env.port, () => {
       apiKeyLoaded: !!env.geminiApiKey,
       apiKeyPrefix: env.geminiApiKey ? `${env.geminiApiKey.slice(0, 8)}…` : '(missing)',
     });
+    verifyGroqPipelineStartup().catch(console.error);
   }
 });
 

@@ -89,6 +89,7 @@ function TranscriptBlock({
       layout
       initial={false}
       id={`yt-studyflow-block-${block.id}`}
+      data-testid="transcript-cue"
       className={twMerge(
         clsx(
           'group relative grid grid-cols-[4.5rem_1fr] gap-x-3 border-l-2 py-3 pl-3 pr-2 transition-colors',
@@ -181,6 +182,16 @@ export function TranscriptPanel({
   );
 
   useEffect(() => {
+    console.log('[TRANSCRIPT DEBUG] PANEL_RENDER', {
+      status,
+      loading,
+      availability,
+      enhancedCount: enhancedChunks.length,
+      displayCount: displayBlocks.length,
+    });
+  }, [status, loading, availability, enhancedChunks.length, displayBlocks.length]);
+
+  useEffect(() => {
     if (!activeChunk || searchQuery.trim()) return;
     const block = displayBlocks.find((b) => b.chunkIds.includes(activeChunk.id));
     const el = listRef.current?.querySelector(
@@ -221,7 +232,7 @@ export function TranscriptPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div data-testid="transcript-panel" className="flex h-full min-h-0 flex-col">
       <div className="sticky top-0 z-10 border-b border-white/8 bg-surface/95 backdrop-blur-xl">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between gap-3">
@@ -310,7 +321,7 @@ export function TranscriptPanel({
         </div>
       </div>
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={listRef} data-testid="transcript-content" className="min-h-0 flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
           {loading && (
             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

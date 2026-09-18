@@ -3,12 +3,38 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root, [data-theme='dark'] {
     color-scheme: dark;
+    --color-base: #09090b;
+    --color-surface: #101013;
+    --color-surface-raised: #161619;
+    --color-surface-overlay: #1c1c20;
+    --color-content: #f4f4f5;
+    --color-content-muted: #a1a1aa;
+    --color-content-subtle: #71717a;
+    --color-content-faint: #52525b;
+    --color-line: rgba(255, 255, 255, 0.08);
+    --color-line-strong: rgba(255, 255, 255, 0.15);
+    --color-line-soft: rgba(255, 255, 255, 0.04);
     font-family: 'Inter', 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  .light, [data-theme='light'] {
+    color-scheme: light;
+    --color-base: #f8fafc;
+    --color-surface: #ffffff;
+    --color-surface-raised: #f1f5f9;
+    --color-surface-overlay: #e2e8f0;
+    --color-content: #0f172a;
+    --color-content-muted: #475569;
+    --color-content-subtle: #64748b;
+    --color-content-faint: #94a3b8;
+    --color-line: rgba(0, 0, 0, 0.08);
+    --color-line-strong: rgba(0, 0, 0, 0.15);
+    --color-line-soft: rgba(0, 0, 0, 0.04);
   }
 
   body {
@@ -24,11 +50,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(140, 140, 160, 0.25);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(140, 140, 160, 0.4);
   }
 }
 

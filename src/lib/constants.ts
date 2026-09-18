@@ -61,8 +61,8 @@ export const GEMINI = {
   EMBEDDING_FALLBACKS: ['embedding-001'] as const,
   /** Vector RAG: cosine similarity over stored embeddings */
   EMBEDDINGS_ENABLED: true,
-  /** Cap per video to protect free-tier embedding quota */
-  MAX_EMBED_CHUNKS: 48,
+  /** Cap per video matching backend schema max limit (200 chunks) */
+  MAX_EMBED_CHUNKS: 200,
   MAX_OUTPUT_TOKENS: 1200,
   TEMPERATURE: 0.3,
 } as const;

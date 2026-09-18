@@ -36,10 +36,12 @@ export function useChat() {
 
       if (loadId !== historyLoadRef.current) return;
       if (useChatStore.getState().loading) return;
+      if (useChatStore.getState().messages.length > 0) return;
 
       const history = await loadChatHistory(videoId);
       if (loadId !== historyLoadRef.current) return;
       if (useChatStore.getState().loading) return;
+      if (useChatStore.getState().messages.length > 0) return;
 
       useChatStore.getState().setMessages(history);
     })();

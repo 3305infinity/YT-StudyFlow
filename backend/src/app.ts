@@ -18,6 +18,8 @@ import { playlistsRoutes } from './routes/playlists.routes.js';
 import { studySessionsRoutes } from './routes/studySessions.routes.js';
 import { transcriptRoutes } from './routes/transcript.routes.js';
 
+import { personalNotesRouter } from './routes/personalNotes.routes.js';
+
 export function createApp() {
   const app = express();
 
@@ -26,9 +28,56 @@ export function createApp() {
   app.use(express.json({ limit: '2mb' }));
 
   app.use('/health', healthRoutes);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/personal-notes', personalNotesRouter);
+  app.use('/api/ai', requireAuth, globalRateLimiter, aiRoutes);
+
+  app.get('/api/groq-test', async (_req, res) => {
+    try {
+      const { runAnswerGenerationPipeline } = await import('./services/answerGeneration/pipeline.js');
+      const question = 'Summarize the main ideas in 3 points';
+      const chunks = [
+        {
+          text: 'The Fourier Transform decomposes a time-domain signal into its constituent frequency components. This allows engineers to analyze which frequencies are dominant.',
+          startTime: 30,
+          endTime: 90,
+        },
+        {
+          text: 'The Discrete Fourier Transform (DFT) works on digital sampled signals in computers.',
+          startTime: 91,
+          endTime: 150,
+        },
+        {
+          text: 'The Fast Fourier Transform (FFT) is an efficient algorithmic implementation reducing complexity to O(N log N).',
+          startTime: 151,
+          endTime: 210,
+        },
+      ];
+
+      const result = await runAnswerGenerationPipeline({
+        question,
+        chunks,
+        mode: 'concise',
+        coverage: 'strong',
+      });
+
+      res.json({
+        ok: true,
+        httpStatus: 200,
+        selectedModel: result.model,
+        hasSystemInstruction: true,
+        geminiFallbackTriggered: false,
+        deprecatedModelsCalled: false,
+        question,
+        generatedAnswerText: result.explanation || result.directAnswer,
+        tokensUsed: result.tokensUsed ?? null,
+      });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   app.use(clerkAuthMiddleware);
-  app.use('/api/auth', requireAuth, authRoutes);
   app.use('/api/ai', requireAuth, globalRateLimiter, aiRoutes);
   app.use('/api/rag', requireAuth, globalRateLimiter, ragRoutes);
   app.use('/api/chat', requireAuth, globalRateLimiter, chatRoutes);

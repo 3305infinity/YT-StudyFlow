@@ -1,26 +1,26 @@
 # YT StudyFlow
 
-A production-grade RAG system for YouTube video content analysis with intelligent retrieval, context packing, and performance optimization.
+A production-grade RAG system for YouTube video content analysis with intelligent retrieval, context packing, and Groq AI tutor final answer generation.
 
 <img width="1421" height="673" alt="image" src="https://github.com/user-attachments/assets/5a6c657b-7e89-4bbc-8325-dd6a1f6b21cd" />
 
 
 ## Overview
 
-YT StudyFlow transforms YouTube videos into interactive study companions. Upload a video URL, and the system automatically processes transcripts, generates embeddings, and enables semantic search with follow-up question support.
+YT StudyFlow transforms YouTube videos into interactive study companions. Upload a video URL, and the system automatically processes transcripts, generates Gemini embeddings, performs Pinecone vector retrieval, and uses **Groq** to generate natural, grounded educational responses presented in a clean AI tutor interface.
 
 ## Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│  YouTube    │────▶│  Transcript   │────▶│ Semantic      │
-│  Video      │     │  Ingestion    │     │  Chunking     │
+│  YouTube    │────▶│  Transcript   │────▶│ Semantic     │
+│  Video      │     │  Ingestion    │     │ Chunking     │
 └─────────────┘     └──────────────┘     └──────────────┘
                                                 │
                                                 ▼
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Gemini     │◀───│ Dense + Sparse │────▶│  Pinecone     │
-│  Embedding  │     │  Embeddings   │     │  Vector DB    │
+│  Gemini     │◀───│ Dense + Sparse │────▶│  Pinecone    │
+│ Embedding   │     │  Embeddings   │     │  Vector DB   │
 └─────────────┘     └──────────────┘     └──────────────┘
                                                 │
                                                 ▼
@@ -50,28 +50,29 @@ YT StudyFlow transforms YouTube videos into interactive study companions. Upload
                                                 │
                                                 ▼
                                         ┌──────────────┐
-                                        │ Prompt       │
-                                        │ Building     │
+                                        │ Groq LLM     │
+                                        │ Generation   │
                                         └──────────────┘
                                                 │
                                                 ▼
                                         ┌──────────────┐
-                                        │ Gemini       │
-                                        │ Generation   │
+                                        │ Clean AI     │
+                                        │ Tutor UI     │
                                         └──────────────┘
 ```
 
 ## Features
 
-- **Semantic Chunking**: Time-aware transcript segmentation for context preservation
-- **Hybrid Retrieval**: Native Pinecone sparse vectors + dense embeddings for improved recall
-- **Query Intelligence**: Rule-based rewriting for follow-ups and broad queries
+- **Gemini Dense Embeddings**: High-dimensional embeddings (`gemini-embedding-001`) for semantic search
+- **Pinecone Vector Search**: Scalable vector index retrieval with adaptive-k logic
+- **Groq Final Answer Generation**: Powered by fast, production Groq models (`openai/gpt-oss-20b`)
+- **Dual Knowledge Coverage**: Uses transcript evidence when available, supplemented by general model knowledge when absent (without false transcript attribution)
 - **MMR Reranking**: Diversity-aware selection preventing redundant context
-- **Context Packing**: Adjacent chunk merging to optimize token budgets
+- **Context Packing**: Time-aware chunk merging to optimize token budgets
+- **Clean AI Tutor UI**: Natural response presentation free of debug labels, similarity percentages, or forced multi-card collapsible headers
+- **Compact Timestamp Sources**: Sleek `Lecture · 2:14` timestamp chips with seek-to-video capabilities
 - **Multi-Level Caching**: Query rewrite, embedding, retrieval, and packing caches
-- **Performance Optimization**: Request deduplication for concurrent identical queries
-- **Observability**: Per-stage latency metrics and structured logging
-- **Graceful Degradation**: Timeout protection with fallback to keyword search
+- **Observability**: Detailed per-stage dev logs without vector float array dumps
 
 ## Tech Stack
 
@@ -79,61 +80,67 @@ YT StudyFlow transforms YouTube videos into interactive study companions. Upload
 |-------|-----------|
 | Runtime | Node.js 20+ |
 | Language | TypeScript |
+| Embeddings | Google Gemini (`gemini-embedding-001`) |
 | Vector DB | Pinecone |
-| Embeddings | Google Gemini |
+| Answer LLM | Groq (`openai/gpt-oss-20b`) |
 | Backend | Express.js |
-| Database | Prisma (PostgreSQL) |
+| Database | Prisma (PostgreSQL / Supabase) |
 | Caching | In-memory LRU |
 
 ## RAG Pipeline
 
-The retrieval pipeline follows a sophisticated multi-stage approach:
+The retrieval and generation pipeline follows a multi-stage architecture:
 
 1. **Transcript Processing**: Videos are split into semantic chunks preserving time boundaries
-2. **Embedding Generation**: Gemini creates 768-dimensional dense vectors
-3. **Sparse Encoding**: BM25-style tf-idf vectors for lexical matching
-4. **Hybrid Storage**: Both vectors stored in Pinecone for combined scoring
-5. **Query Rewriting**: Follow-up questions expanded with context
-6. **Vector Search**: Top-40 candidates retrieved with native hybrid scoring
-7. **MMR Reranking**: Top-10 selected with diversity optimization (λ=0.7)
-8. **Context Packing**: Adjacent chunks merged within 5s gaps
-9. **Prompt Generation**: Structured prompt with packed contexts
-10. **Response**: Gemini generates structured JSON output
+2. **Embedding Generation**: Gemini creates dense vectors for transcript chunks
+3. **Pinecone Indexing**: Embedded chunks stored in Pinecone vector index
+4. **Query Rewriting**: Follow-up questions expanded with context
+5. **Vector Search**: Relevant candidates retrieved from Pinecone
+6. **MMR Reranking**: Candidates reranked for optimal relevance and diversity
+7. **Context Packing**: Relevant transcript chunks packed with timestamp metadata
+8. **Groq Generation**: System-instructed Groq model generates direct, clear AI tutor response
+9. **Clean UI Rendering**: Clean Markdown answer with compact timestamp chips
 
 ## Installation
 
 ```bash
 # Clone repository
-git clone https://github.com/[username]/yt-studyflow.git
-cd yt-studyflow
+git clone https://github.com/3305infinity/YT-StudyFlow.git
+cd YT-StudyFlow
 
 # Install backend
 cd backend
 npm install
 
 # Install frontend
-cd ../frontend  # or root if monorepo
+cd ..
 npm install
 ```
 
 ## Environment Variables
 
-```env
-# Required
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_INDEX=your_index_name
-GEMINI_API_KEY=your_gemini_api_key
+Create `backend/.env`:
 
-# Optional
-PINECONE_NAMESPACE=optional_namespace_prefix
-CACHE_MAX_SIZE=1000
+```env
+# Required Services
+PINECONE_API_KEY=your_pinecone_api_key
+PINECONE_INDEX=yt-studyflow
+GEMINI_API_KEY=your_gemini_api_key
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-20b
+
+# Database & Auth
+DATABASE_URL=your_postgresql_url
+CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+ALLOW_DEV_AUTH=true
 ```
 
 ## Usage
 
 ```bash
 # Development
-npm run dev          # Both frontend and backend
+npm run dev          # Runs frontend and backend dev servers
 
 # Backend only
 cd backend
@@ -141,24 +148,16 @@ npm run dev
 
 # Production build
 npm run build
-npm start
 ```
-
-## Performance Improvements
-
-- **30-50% reduction** in duplicate query latency via request deduplication
-- **20-30% improvement** in concurrent request throughput
-- **Timeout protection** prevents hanging requests (5s Pinecone, 10s Embedding, 15s Gemini)
-- **Graceful degradation** ensures availability during partial outages
 
 ## Engineering Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| MMR λ=0.7 | Empirical balance between relevance and diversity |
-| Top-40 → Top-10 | Candidate pool allows MMR to find diverse results |
-| In-memory caching | Zero-latency for cache hits, no external dependencies |
-| Optional sparse vectors | Backward compatible deployment before index migration |
+| Gemini Embeddings + Pinecone | Accurate vector space retrieval over large transcript datasets |
+| Groq Final Answer Generator | Sub-second inference speed for natural conversational responses |
+| Optional Transcript Coverage | Allows the AI tutor to answer general questions when transcript coverage is missing |
+| Compact Source Chips | Non-intimidating timestamp references (`Lecture · 2:14`) with direct video seek |
 
 ## Limitations
 

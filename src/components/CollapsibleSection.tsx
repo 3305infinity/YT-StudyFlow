@@ -24,12 +24,12 @@ export function CollapsibleSection({
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-lg"
       >
-        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-300">
+        <span className="text-[13px] font-semibold uppercase tracking-wider text-neutral-200">
           {title}
         </span>
         <span className="flex items-center gap-2">
           {badge && (
-            <span className="rounded-md bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">
+            <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-[11.5px] font-medium text-neutral-300">
               {badge}
             </span>
           )}

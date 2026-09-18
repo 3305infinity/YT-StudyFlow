@@ -7,6 +7,7 @@
 const FETCH = 'YT_STUDYFLOW_FETCH_TRANSCRIPT';
 const RESULT = 'YT_STUDYFLOW_TRANSCRIPT_RESULT';
 const READY = 'YT_STUDYFLOW_PAGE_TRANSPORT_READY';
+const PING = 'YT_STUDYFLOW_PING_TRANSPORT';
 const GET_CAPTURED = 'YT_STUDYFLOW_GET_CAPTURED_CAPTIONS';
 const CAPTURED_RESULT = 'YT_STUDYFLOW_CAPTURED_CAPTIONS';
 const TIMEOUT_MS = 10000;
@@ -61,7 +62,6 @@ function installCaptionHooks(): void {
   w.__ytStudyFlowCaptionHooks = true;
 
   const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
 
   XMLHttpRequest.prototype.open = function (
     method: string,
@@ -70,19 +70,13 @@ function installCaptionHooks(): void {
     username?: string | null,
     password?: string | null
   ) {
-    (this as XMLHttpRequest & { _sfUrl?: string })._sfUrl = String(url);
-    return origOpen.call(this, method, url, async ?? true, username, password);
-  };
-
-  XMLHttpRequest.prototype.send = function (body?: XMLHttpRequestBodyInit | null) {
-    const xhr = this as XMLHttpRequest & { _sfUrl?: string };
-    const url = xhr._sfUrl ?? '';
-    if (isCaptionUrl(url)) {
-      xhr.addEventListener('load', () => {
-        recordCaption(url, xhr.responseText ?? '', xhr.getResponseHeader('content-type') ?? '');
+    const urlStr = String(url);
+    if (isCaptionUrl(urlStr)) {
+      this.addEventListener('load', () => {
+        recordCaption(urlStr, this.responseText ?? '', this.getResponseHeader('content-type') ?? '');
       });
     }
-    return origSend.call(this, body);
+    return origOpen.call(this, method, url, async ?? true, username, password);
   };
 }
 
@@ -158,6 +152,11 @@ if (!(window as Window & { __ytStudyFlowTransportReady?: boolean }).__ytStudyFlo
       | FetchMessage
       | { type?: string; requestToken?: string }
       | undefined;
+
+    if (data?.type === PING) {
+      window.postMessage({ type: READY }, '*');
+      return;
+    }
 
     if (data?.type === FETCH) {
       handleFetch(data as FetchMessage);

@@ -9,22 +9,37 @@ datasource db {
 }
 
 model User {
-  id        String   @id
-  email     String?
-  name      String?
-  imageUrl  String?
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  name         String?
+  imageUrl     String?
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  videos        Video[]
+  playlists     Playlist[]
+  chats         Chat[]
+  notes         Note[]
+  personalNotes PersonalNote[]
+  flashcards    Flashcard[]
+  quizzes       Quiz[]
+  transcripts   Transcript[]
+  usageLogs     UsageLog[]
+  studySessions StudySession[]
+}
+
+model PersonalNote {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  videos     Video[]
-  playlists  Playlist[]
-  chats      Chat[]
-  notes      Note[]
-  flashcards Flashcard[]
-  quizzes    Quiz[]
-  transcripts Transcript[]
-  usageLogs  UsageLog[]
-  studySessions StudySession[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
 }
 
 model Video {

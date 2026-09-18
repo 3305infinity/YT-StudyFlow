@@ -133,16 +133,24 @@ export function parseXml(text: string): RawCue[] {
   let match: RegExpExecArray | null;
 
   while ((match = re.exec(text))) {
-    const start = Number(match[1]) / 1000;
-    const duration = Number(match[2]) / 1000;
+    const rawStart = Number(match[1]);
+    const rawDur = Number(match[2]);
+    if (!Number.isFinite(rawStart) || !Number.isFinite(rawDur)) continue;
+
+    // YouTube timedtext XML may specify seconds (e.g. "1.234") or ms (e.g. "12340")
+    const start = match[1]!.includes('.') || rawStart < 500 ? rawStart : rawStart / 1000;
+    const duration = match[2]!.includes('.') || rawDur < 50 ? rawDur : rawDur / 1000;
+
     const cueText = (match[3] ?? '')
       .replace(/<[^>]+>/g, '')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
       .trim();
 
-    if (Number.isFinite(start) && Number.isFinite(duration) && duration > 0 && cueText) {
+    if (duration > 0 && cueText) {
       cues.push({ start, duration, text: cueText });
     }
   }
@@ -203,19 +211,37 @@ export function parseInnertubeTranscript(data: Record<string, unknown>): RawCue[
 }
 
 export function parseCaptionPayload(text: string, contentType: string): RawCue[] | null {
-  if (!text) return null;
-  if (/^\s*<!doctype html/i.test(text) || /^\s*<html/i.test(text)) return null;
+  if (!text) {
+    console.warn('[YT StudyFlow] parseCaptionPayload received empty payload');
+    return null;
+  }
+  if (/^\s*<!doctype html/i.test(text) || /^\s*<html/i.test(text)) {
+    console.warn('[YT StudyFlow] parseCaptionPayload received HTML content (likely bot verification or consent page)');
+    return null;
+  }
 
   if (contentType.includes('vtt') || text.includes('WEBVTT')) {
     const vtt = parseVtt(text);
-    return vtt.length ? vtt : null;
+    if (vtt.length) {
+      console.log('[YT StudyFlow] Parsed VTT caption format:', vtt.length, 'cues');
+      return vtt;
+    }
   }
 
   const json3 = parseJson3(text);
-  if (json3?.length) return json3;
+  if (json3?.length) {
+    console.log('[YT StudyFlow] Parsed JSON3 caption format:', json3.length, 'cues');
+    return json3;
+  }
 
   const xml = parseXml(text);
-  return xml.length ? xml : null;
+  if (xml.length) {
+    console.log('[YT StudyFlow] Parsed XML caption format:', xml.length, 'cues');
+    return xml;
+  }
+
+  console.warn('[YT StudyFlow] parseCaptionPayload failed to parse text as VTT, JSON3, or XML');
+  return null;
 }
 
 export function extractFromDomPanel(): RawCue[] {
