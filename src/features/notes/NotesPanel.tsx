@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { FileText, Pencil, Plus, Save, Trash2, Sun, Moon, Loader2, AlertCircle, BookOpen, Sparkles } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { FileText, Pencil, Plus, Save, Trash2, Sun, Moon, Loader2, AlertCircle, BookOpen, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
 import { useNotesStore } from './notes.store';
@@ -47,6 +47,12 @@ export function NotesPanel({ videoId }: { videoId: string }) {
   // Mode: AI Notes vs My Notes
   const [workspaceMode, setWorkspaceMode] = useState<'ai' | 'personal'>('ai');
 
+  // Resizable & Collapsible Sidebar State
+  const [sidebarWidth, setSidebarWidth] = useState<number>(140);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // AI Notes state
   const { notes, loading, error, load, generate, remove, updateContent } = useNotesStore();
   const chunks = useRagStore((s) => s.chunks);
@@ -72,6 +78,32 @@ export function NotesPanel({ videoId }: { videoId: string }) {
   const [displayContent, setDisplayContent] = useState<string>('');
   const [translating, setTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (containerRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const newW = e.clientX - containerRect.left;
+        const clamped = Math.max(90, Math.min(300, newW));
+        setSidebarWidth(clamped);
+      }
+    };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   useEffect(() => {
     void load(videoId);
@@ -324,12 +356,30 @@ export function NotesPanel({ videoId }: { videoId: string }) {
             </div>
           )}
 
-          {/* Main Layout: Fixed 220px Sidebar + Full Content Workspace */}
-          <div className="flex min-h-0 flex-1 flex-row w-full overflow-hidden">
-            {/* Sidebar (Fixed 220px width) */}
-            <aside className={clsx('w-[220px] shrink-0 overflow-y-auto border-r p-3 space-y-1.5', theme === 'light' ? 'border-slate-200 bg-slate-100/60' : 'border-line bg-surface')}>
-              <div className="px-2 py-1 text-micro font-semibold uppercase tracking-wider text-content-subtle">
-                {workspaceMode === 'ai' ? `AI Study Notes (${notes.length})` : `My Personal Notes (${personalNotes.length})`}
+          {/* Main Layout: Resizable Sidebar + Full Content Workspace */}
+          <div ref={containerRef} className="flex min-h-0 flex-1 flex-row w-full overflow-hidden relative">
+            {/* Sidebar (Dynamic Resizable Width) */}
+            <aside
+              style={{ width: isCollapsed ? '0px' : `${sidebarWidth}px` }}
+              className={clsx(
+                'shrink-0 overflow-y-auto space-y-1.5 transition-all duration-75 border-r',
+                isCollapsed && 'w-0 p-0 border-none overflow-hidden opacity-0 pointer-events-none',
+                !isCollapsed && 'p-2',
+                theme === 'light' ? 'border-slate-200 bg-slate-100/60' : 'border-line bg-surface'
+              )}
+            >
+              <div className="flex items-center justify-between px-1 py-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-content-subtle truncate">
+                  {workspaceMode === 'ai' ? `AI (${notes.length})` : `Personal (${personalNotes.length})`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCollapsed(true)}
+                  title="Collapse Sidebar"
+                  className="rounded p-0.5 text-content-subtle hover:bg-surface-raised hover:text-content"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
               </div>
 
               {workspaceMode === 'ai'
@@ -344,7 +394,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           setEditing(false);
                         }}
                         className={clsx(
-                          'w-full rounded-lg p-2.5 text-left transition-all duration-170 border',
+                          'w-full rounded-lg p-2 text-left transition-all duration-170 border',
                           isSelected
                             ? theme === 'light'
                               ? 'border-indigo-400 bg-white text-slate-900 shadow-sm'
@@ -354,9 +404,9 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                               : 'border-transparent text-content-muted hover:bg-surface-raised'
                         )}
                       >
-                        <div className="flex items-center justify-between gap-1 mb-1">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
                           <span className={clsx(
-                            'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize',
+                            'inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold capitalize',
                             n.type === 'interview'
                               ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                               : n.type === 'revision'
@@ -365,9 +415,9 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           )}>
                             {n.type}
                           </span>
-                          <span className="text-[10px] text-content-subtle shrink-0">{formatTimeAgo(n.updatedAt)}</span>
+                          <span className="text-[9px] text-content-subtle shrink-0">{formatTimeAgo(n.updatedAt)}</span>
                         </div>
-                        <p className="text-xs font-semibold leading-snug line-clamp-2 text-content">
+                        <p className="text-[11px] font-semibold leading-snug line-clamp-2 text-content">
                           {n.title}
                         </p>
                       </button>
@@ -384,7 +434,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           setPersonalEditing(false);
                         }}
                         className={clsx(
-                          'w-full rounded-lg p-2.5 text-left transition-all duration-170 border',
+                          'w-full rounded-lg p-2 text-left transition-all duration-170 border',
                           isSelected
                             ? theme === 'light'
                               ? 'border-indigo-400 bg-white text-slate-900 shadow-sm'
@@ -394,13 +444,13 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                               : 'border-transparent text-content-muted hover:bg-surface-raised'
                         )}
                       >
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="inline-flex items-center rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400 border border-indigo-500/30">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className="inline-flex items-center rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-400 border border-indigo-500/30">
                             Personal
                           </span>
-                          <span className="text-[10px] text-content-subtle shrink-0">{formatTimeAgo(p.updatedAt)}</span>
+                          <span className="text-[9px] text-content-subtle shrink-0">{formatTimeAgo(p.updatedAt)}</span>
                         </div>
-                        <p className="text-xs font-semibold leading-snug line-clamp-2 text-content">
+                        <p className="text-[11px] font-semibold leading-snug line-clamp-2 text-content">
                           {p.title || 'Untitled Note'}
                         </p>
                       </button>
@@ -408,14 +458,39 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                   })}
             </aside>
 
+            {/* Draggable Splitter Handle */}
+            {!isCollapsed && (
+              <div
+                onMouseDown={handleMouseDown}
+                title="Drag to adjust sidebar width"
+                className={clsx(
+                  'w-1.5 hover:w-2 cursor-col-resize shrink-0 transition-all select-none z-10 flex items-center justify-center group',
+                  isDragging ? 'bg-brand' : 'bg-line/40 hover:bg-brand/60'
+                )}
+              >
+                <div className="h-6 w-0.5 bg-content-subtle/40 group-hover:bg-brand rounded-full" />
+              </div>
+            )}
+
             {/* Note Detail / Editor Area (Spacious Width) */}
-            <main className={clsx('min-h-0 flex-1 min-w-0 overflow-y-auto px-6 py-5', theme === 'light' ? 'bg-white text-slate-900' : 'bg-base text-content')}>
+            <main className={clsx('min-h-0 flex-1 min-w-0 overflow-y-auto px-3.5 py-4 sm:px-5 sm:py-5', theme === 'light' ? 'bg-white text-slate-900' : 'bg-base text-content')}>
               {workspaceMode === 'ai' ? (
                 activeAiNote ? (
-                  <div className="w-full max-w-full space-y-6">
-                    <div className="flex items-start justify-between gap-4 border-b border-line/60 pb-4">
-                      <div className="space-y-1.5 min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
+                  <div className="w-full max-w-full space-y-5">
+                    {/* Header: Row 1 = Badges & Actions, Row 2 = 100% Width Title */}
+                    <div className="space-y-2 border-b border-line/60 pb-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {isCollapsed && (
+                            <button
+                              type="button"
+                              onClick={() => setIsCollapsed(false)}
+                              className="rounded border border-line bg-surface p-1 text-content-subtle hover:text-content mr-1"
+                              title="Expand sidebar"
+                            >
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <span className="rounded-md border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs font-semibold capitalize text-brand">
                             {activeAiNote.type} Note
                           </span>
@@ -423,46 +498,47 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                             Updated {formatTimeAgo(activeAiNote.updatedAt)}
                           </span>
                         </div>
-                        <h2 className="text-xl font-bold tracking-tight text-content break-words leading-snug">
-                          {activeAiNote.title}
-                        </h2>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {editing ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void handleSaveAi()}
+                              className="gap-1.5 h-7 px-2.5 text-xs"
+                            >
+                              <Save className="h-3.5 w-3.5" />
+                              <span>Save</span>
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditing(true)}
+                              className="gap-1.5 h-7 px-2.5 text-xs"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span>Edit</span>
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => remove(activeAiNote.id, videoId)}
+                            className="gap-1.5 h-7 px-2.5 text-xs"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Delete</span>
+                          </Button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {editing ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void handleSaveAi()}
-                            className="gap-1.5"
-                          >
-                            <Save className="h-4 w-4" />
-                            <span>Save</span>
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditing(true)}
-                            className="gap-1.5"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            <span>Edit</span>
-                          </Button>
-                        )}
-                        <Button
-                          type="button"
-                          variant="danger"
-                          size="sm"
-                          onClick={() => remove(activeAiNote.id, videoId)}
-                          className="gap-1.5"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span>Delete</span>
-                        </Button>
-                      </div>
+                      <h2 className="text-base sm:text-lg font-bold tracking-tight text-content break-words leading-snug w-full pt-0.5">
+                        {activeAiNote.title}
+                      </h2>
                     </div>
 
                     {editing ? (
@@ -485,7 +561,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                         <div className="leading-relaxed">
                           <FormattedMarkdownText
                             text={displayContent || activeAiNote.content}
-                            className="text-[15px] leading-[1.7] text-content"
+                            className="text-[14.5px] leading-[1.7] text-content"
                           />
                         </div>
                       </div>
@@ -503,70 +579,81 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                   </div>
                 )
               ) : activePersonalNote ? (
-                <div className="w-full max-w-full space-y-6">
-                  <div className="flex items-start justify-between gap-4 border-b border-line/60 pb-4">
-                    <div className="space-y-2 flex-1 min-w-0">
-                      {personalEditing ? (
-                        <input
-                          type="text"
-                          value={personalTitleDraft}
-                          onChange={(e) => setPersonalTitleDraft(e.target.value)}
-                          className={clsx(
-                            'w-full rounded-lg border px-3 py-1.5 text-lg font-bold text-content focus:outline-none focus:ring-2 focus:ring-brand/40',
-                            theme === 'light' ? 'border-slate-300 bg-slate-50' : 'border-line bg-surface'
-                          )}
-                          placeholder="Note Title..."
-                        />
-                      ) : (
-                        <div>
-                          <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-400">
-                            Personal Note
-                          </span>
-                          <h2 className="text-xl font-bold tracking-tight text-content mt-1 break-words leading-snug">
-                            {activePersonalNote.title || 'Untitled Note'}
-                          </h2>
-                        </div>
-                      )}
-                      <span className="text-xs text-content-subtle block">
-                        Updated {formatTimeAgo(activePersonalNote.updatedAt)}
-                      </span>
+                <div className="w-full max-w-full space-y-5">
+                  <div className="space-y-2 border-b border-line/60 pb-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isCollapsed && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCollapsed(false)}
+                            className="rounded border border-line bg-surface p-1 text-content-subtle hover:text-content mr-1"
+                            title="Expand sidebar"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-400">
+                          Personal Note
+                        </span>
+                        <span className="text-xs text-content-subtle">
+                          Updated {formatTimeAgo(activePersonalNote.updatedAt)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {personalEditing ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleSavePersonal()}
+                            className="gap-1.5 h-7 px-2.5 text-xs"
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                            <span>Save</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPersonalEditing(true)}
+                            className="gap-1.5 h-7 px-2.5 text-xs"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span>Edit</span>
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => void handleDeletePersonal(activePersonalNote.id)}
+                          className="gap-1.5 h-7 px-2.5 text-xs"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete</span>
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {personalEditing ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void handleSavePersonal()}
-                          className="gap-1.5"
-                        >
-                          <Save className="h-4 w-4" />
-                          <span>Save</span>
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setPersonalEditing(true)}
-                          className="gap-1.5"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          <span>Edit</span>
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        onClick={() => void handleDeletePersonal(activePersonalNote.id)}
-                        className="gap-1.5"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span>Delete</span>
-                      </Button>
-                    </div>
+                    {personalEditing ? (
+                      <input
+                        type="text"
+                        value={personalTitleDraft}
+                        onChange={(e) => setPersonalTitleDraft(e.target.value)}
+                        className={clsx(
+                          'w-full rounded-lg border px-3 py-1.5 text-base font-bold text-content focus:outline-none focus:ring-2 focus:ring-brand/40',
+                          theme === 'light' ? 'border-slate-300 bg-slate-50' : 'border-line bg-surface'
+                        )}
+                        placeholder="Note Title..."
+                      />
+                    ) : (
+                      <h2 className="text-base sm:text-lg font-bold tracking-tight text-content break-words leading-snug w-full pt-0.5">
+                        {activePersonalNote.title || 'Untitled Note'}
+                      </h2>
+                    )}
                   </div>
 
                   {personalEditing ? (
@@ -589,7 +676,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                       {activePersonalNote.content ? (
                         <FormattedMarkdownText
                           text={activePersonalNote.content}
-                          className="text-[15px] leading-[1.7] text-content"
+                          className="text-[14.5px] leading-[1.7] text-content"
                         />
                       ) : (
                         <p className="text-sm italic text-content-subtle">

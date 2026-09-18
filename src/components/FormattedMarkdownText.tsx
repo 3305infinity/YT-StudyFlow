@@ -67,6 +67,61 @@ export function FormattedMarkdownText({
         );
       }
 
+      // Markdown Table Detection & Rendering
+      if (trimmedPara.includes('|') && (trimmedPara.includes('---') || trimmedPara.includes('-|-') || trimmedPara.includes('Key Points'))) {
+        let tableLines = trimmedPara.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+        
+        // Handle single-line serialized tables like "| | Concept | Key Points | |---|---| | 1 | ..."
+        if (tableLines.length === 1 || !tableLines.some((l) => l.includes('---'))) {
+          const splitMatches = trimmedPara.split(/(?<=\|)\s*(?=\|)/);
+          if (splitMatches.length > 1) {
+            tableLines = splitMatches.map((l) => l.trim()).filter((l) => l.length > 0);
+          }
+        }
+
+        const dataLines = tableLines.filter((l) => !/^\s*\|?\s*:?-+:?\s*\|?$/.test(l) && l.replace(/\|/g, '').trim().length > 0);
+        if (dataLines.length > 0) {
+          const rows = dataLines.map((line) => {
+            let cleanLine = line.trim();
+            if (cleanLine.startsWith('|')) cleanLine = cleanLine.slice(1);
+            if (cleanLine.endsWith('|')) cleanLine = cleanLine.slice(0, -1);
+            return cleanLine.split('|').map((cell) => cell.trim()).filter((c) => c.length > 0);
+          }).filter((row) => row.length > 0);
+
+          if (rows.length > 0) {
+            const header = rows[0] || [];
+            const bodyRows = rows.slice(1);
+
+            return (
+              <div key={pIdx} className="my-4 overflow-x-auto rounded-lg border border-line bg-surface/50 p-0.5 shadow-sm">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-surface-raised border-b border-line text-content font-semibold">
+                    <tr>
+                      {header.map((cell, idx) => (
+                        <th key={idx} className="px-3 py-2 border-r border-line/40 last:border-r-0 font-bold">
+                          {renderInline(cell)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line/40 text-content-muted">
+                    {bodyRows.map((row, rIdx) => (
+                      <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-transparent' : 'bg-surface-raised/20'}>
+                        {row.map((cell, cIdx) => (
+                          <td key={cIdx} className="px-3 py-2 border-r border-line/30 last:border-r-0 align-top">
+                            {renderInline(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
+        }
+      }
+
       const lines = trimmedPara.split('\n').filter((l) => l.trim().length > 0);
 
       // Bullet List
