@@ -6,6 +6,7 @@ function sanitize(text: string): string {
     .replace(/<svg[\s\S]*?<\/svg>/gi, '')
     .replace(/\[svg[^\]]*\]/gi, '')
     .replace(/\bsvg\b(?!\s*[:=])/gi, '')
+    .replace(/(^|\s)#+(?=\s|$)/g, ' ')
     .trim();
 }
 
@@ -13,7 +14,7 @@ function sanitize(text: string): string {
  * Parses markdown inline styles (**bold**, `code`) safely into React elements.
  */
 function renderInline(text: string) {
-  const clean = sanitize(text);
+  const clean = sanitize(text).replace(/#+\s*$/g, '').trim();
   // Match **bold** or `code`
   const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
   const parts = clean.split(regex);
@@ -54,13 +55,13 @@ export function FormattedMarkdownText({
     const paragraphs = cleaned.split(/\n{2,}/);
 
     return paragraphs.map((para, pIdx) => {
-      const trimmedPara = para.trim();
+      const trimmedPara = para.trim().replace(/#+\s*$/g, '').trim();
 
-      // Headings (# Heading, ## Heading, ### Heading)
-      if (trimmedPara.startsWith('#')) {
-        const headingText = trimmedPara.replace(/^#+\s*/, '');
+      // Headings (# Heading, ## Heading, ### Heading or Heading ###)
+      if (trimmedPara.startsWith('#') || /^[A-Z0-9\s_\-\.]{3,60}\s*#+$/i.test(trimmedPara)) {
+        const headingText = trimmedPara.replace(/^#+\s*/, '').replace(/\s*#+$/, '').trim();
         return (
-          <h3 key={pIdx} className="pt-1.5 text-[15px] font-bold text-content tracking-tight">
+          <h3 key={pIdx} className="pt-3 pb-1 text-base font-bold text-content tracking-tight">
             {renderInline(headingText)}
           </h3>
         );

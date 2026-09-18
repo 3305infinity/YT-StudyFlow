@@ -242,8 +242,8 @@ export function NotesPanel({ videoId }: { videoId: string }) {
       >
         <div className="flex h-full min-h-0 flex-col">
           {/* Mode Switcher: AI Notes vs My Notes */}
-          <div className={clsx('flex items-center justify-between border-b px-4 py-2', theme === 'light' ? 'border-slate-200 bg-white' : 'border-line bg-surface')}>
-            <div className="flex gap-1.5">
+          <div className={clsx('flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 shrink-0', theme === 'light' ? 'border-slate-200 bg-white' : 'border-line bg-surface')}>
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setWorkspaceMode('ai')}
@@ -273,7 +273,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
             </div>
 
             {workspaceMode === 'ai' && (
-              <div className="flex gap-1 overflow-x-auto">
+              <div className="flex items-center gap-1 flex-wrap">
                 {NOTE_TYPES.map((t) => (
                   <button
                     key={t.id}
@@ -281,7 +281,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                     disabled={loading}
                     onClick={() => generate({ videoId, type: t.id, chunks, videoTitle: title ?? undefined })}
                     className={clsx(
-                      'shrink-0 rounded-md border px-2.5 py-0.5 text-[11px] font-medium transition-all disabled:opacity-40',
+                      'shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-40',
                       theme === 'light'
                         ? 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                         : 'border-line bg-surface-raised text-content-muted hover:text-content'
@@ -295,21 +295,21 @@ export function NotesPanel({ videoId }: { videoId: string }) {
           </div>
 
           {workspaceMode === 'ai' && loading && (
-            <div className="border-b border-line px-4 py-3">
+            <div className="border-b border-line px-4 py-3 shrink-0">
               <Loader label="Generating study notes via Groq..." />
             </div>
           )}
           {workspaceMode === 'ai' && error && <ErrorBanner message={error} />}
 
           {workspaceMode === 'ai' && translating && (
-            <div className="flex items-center gap-2 border-b border-brand/30 bg-brand/10 px-4 py-2 text-xs font-medium text-brand">
+            <div className="flex items-center gap-2 border-b border-brand/30 bg-brand/10 px-4 py-2 text-xs font-medium text-brand shrink-0">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
               <span>Translating content to {languageLabel(responseLanguage)} via Groq...</span>
             </div>
           )}
 
           {workspaceMode === 'ai' && translationError && (
-            <div className="flex items-center justify-between border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-400">
+            <div className="flex items-center justify-between border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-400 shrink-0">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 <span>{translationError}</span>
@@ -324,10 +324,10 @@ export function NotesPanel({ videoId }: { videoId: string }) {
             </div>
           )}
 
-          {/* Main Layout: Fixed 260px Sidebar + Full Content Workspace */}
-          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-            {/* Sidebar (Fixed 260px width) */}
-            <aside className={clsx('w-full md:w-[260px] shrink-0 overflow-y-auto border-r p-3 space-y-1.5', theme === 'light' ? 'border-slate-200 bg-slate-100/60' : 'border-line bg-surface')}>
+          {/* Main Layout: Fixed 220px Sidebar + Full Content Workspace */}
+          <div className="flex min-h-0 flex-1 flex-row w-full overflow-hidden">
+            {/* Sidebar (Fixed 220px width) */}
+            <aside className={clsx('w-[220px] shrink-0 overflow-y-auto border-r p-3 space-y-1.5', theme === 'light' ? 'border-slate-200 bg-slate-100/60' : 'border-line bg-surface')}>
               <div className="px-2 py-1 text-micro font-semibold uppercase tracking-wider text-content-subtle">
                 {workspaceMode === 'ai' ? `AI Study Notes (${notes.length})` : `My Personal Notes (${personalNotes.length})`}
               </div>
@@ -344,7 +344,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           setEditing(false);
                         }}
                         className={clsx(
-                          'w-full rounded-lg p-3 text-left transition-all duration-170 border',
+                          'w-full rounded-lg p-2.5 text-left transition-all duration-170 border',
                           isSelected
                             ? theme === 'light'
                               ? 'border-indigo-400 bg-white text-slate-900 shadow-sm'
@@ -354,7 +354,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                               : 'border-transparent text-content-muted hover:bg-surface-raised'
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-1 mb-1">
                           <span className={clsx(
                             'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize',
                             n.type === 'interview'
@@ -365,7 +365,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           )}>
                             {n.type}
                           </span>
-                          <span className="text-[11px] text-content-subtle">{formatTimeAgo(n.updatedAt)}</span>
+                          <span className="text-[10px] text-content-subtle shrink-0">{formatTimeAgo(n.updatedAt)}</span>
                         </div>
                         <p className="text-xs font-semibold leading-snug line-clamp-2 text-content">
                           {n.title}
@@ -384,7 +384,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           setPersonalEditing(false);
                         }}
                         className={clsx(
-                          'w-full rounded-lg p-3 text-left transition-all duration-170 border',
+                          'w-full rounded-lg p-2.5 text-left transition-all duration-170 border',
                           isSelected
                             ? theme === 'light'
                               ? 'border-indigo-400 bg-white text-slate-900 shadow-sm'
@@ -394,11 +394,11 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                               : 'border-transparent text-content-muted hover:bg-surface-raised'
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-1 mb-1">
                           <span className="inline-flex items-center rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400 border border-indigo-500/30">
                             Personal
                           </span>
-                          <span className="text-[11px] text-content-subtle">{formatTimeAgo(p.updatedAt)}</span>
+                          <span className="text-[10px] text-content-subtle shrink-0">{formatTimeAgo(p.updatedAt)}</span>
                         </div>
                         <p className="text-xs font-semibold leading-snug line-clamp-2 text-content">
                           {p.title || 'Untitled Note'}
@@ -409,13 +409,13 @@ export function NotesPanel({ videoId }: { videoId: string }) {
             </aside>
 
             {/* Note Detail / Editor Area (Spacious Width) */}
-            <main className={clsx('min-h-0 flex-1 overflow-y-auto px-6 py-6', theme === 'light' ? 'bg-white text-slate-900' : 'bg-base text-content')}>
+            <main className={clsx('min-h-0 flex-1 min-w-0 overflow-y-auto px-6 py-5', theme === 'light' ? 'bg-white text-slate-900' : 'bg-base text-content')}>
               {workspaceMode === 'ai' ? (
                 activeAiNote ? (
-                  <div className="mx-auto max-w-4xl space-y-6">
+                  <div className="w-full max-w-full space-y-6">
                     <div className="flex items-start justify-between gap-4 border-b border-line/60 pb-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="rounded-md border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs font-semibold capitalize text-brand">
                             {activeAiNote.type} Note
                           </span>
@@ -423,12 +423,12 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                             Updated {formatTimeAgo(activeAiNote.updatedAt)}
                           </span>
                         </div>
-                        <h2 className="text-heading font-bold tracking-tight text-content">
+                        <h2 className="text-xl font-bold tracking-tight text-content break-words leading-snug">
                           {activeAiNote.title}
                         </h2>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {editing ? (
                           <Button
                             type="button"
@@ -503,9 +503,9 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                   </div>
                 )
               ) : activePersonalNote ? (
-                <div className="mx-auto max-w-4xl space-y-6">
+                <div className="w-full max-w-full space-y-6">
                   <div className="flex items-start justify-between gap-4 border-b border-line/60 pb-4">
-                    <div className="space-y-2 flex-1">
+                    <div className="space-y-2 flex-1 min-w-0">
                       {personalEditing ? (
                         <input
                           type="text"
@@ -522,7 +522,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                           <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-400">
                             Personal Note
                           </span>
-                          <h2 className="text-heading font-bold tracking-tight text-content mt-1">
+                          <h2 className="text-xl font-bold tracking-tight text-content mt-1 break-words leading-snug">
                             {activePersonalNote.title || 'Untitled Note'}
                           </h2>
                         </div>
