@@ -65,6 +65,25 @@ export const authController = {
       });
     } catch (err) {
       console.error('[authController] Signup error:', err);
+      if (process.env.ALLOW_DEV_AUTH === 'true') {
+        console.warn('[authController] DB connection error. ALLOW_DEV_AUTH fallback activated.');
+        const devUserId = `dev-${Date.now()}`;
+        const token = createAuthToken({
+          userId: devUserId,
+          email: normalizedEmail,
+          name: name?.trim() || normalizedEmail.split('@')[0] || 'Dev User',
+        });
+        res.status(201).json({
+          token,
+          user: {
+            id: devUserId,
+            email: normalizedEmail,
+            name: name?.trim() || normalizedEmail.split('@')[0] || 'Dev User',
+            imageUrl: undefined,
+          },
+        });
+        return;
+      }
       res.status(500).json({ error: 'ServerError', message: 'Failed to create account.' });
     }
   },
@@ -106,6 +125,25 @@ export const authController = {
       });
     } catch (err) {
       console.error('[authController] Login error:', err);
+      if (process.env.ALLOW_DEV_AUTH === 'true') {
+        console.warn('[authController] DB connection error. ALLOW_DEV_AUTH fallback activated.');
+        const devUserId = `dev-${normalizedEmail.replace(/[^a-z0-9]/gi, '_')}`;
+        const token = createAuthToken({
+          userId: devUserId,
+          email: normalizedEmail,
+          name: normalizedEmail.split('@')[0] || 'Dev User',
+        });
+        res.json({
+          token,
+          user: {
+            id: devUserId,
+            email: normalizedEmail,
+            name: normalizedEmail.split('@')[0] || 'Dev User',
+            imageUrl: undefined,
+          },
+        });
+        return;
+      }
       res.status(500).json({ error: 'ServerError', message: 'Failed to log in.' });
     }
   },

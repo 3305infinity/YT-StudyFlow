@@ -51,11 +51,11 @@ export const VECTOR_SEARCH = {
 
 export const GEMINI = {
   /** Simple chat — cheapest / highest RPM */
-  CHAT_MODEL: 'gemini-2.5-flash-lite',
+  CHAT_MODEL: 'gemini-1.5-flash',
   /** Notes, chapters, quiz, flashcards */
-  GENERATION_MODEL: 'gemini-2.5-flash',
+  GENERATION_MODEL: 'gemini-1.5-flash',
   /** Deep reasoning only — strict rate limits; avoid for routine calls */
-  REASONING_MODEL: 'gemini-2.5-pro',
+  REASONING_MODEL: 'gemini-1.5-pro',
   /** text-embedding-004 was shut down Jan 2026 — use gemini-embedding-001 */
   EMBEDDING_MODEL: 'gemini-embedding-001',
   EMBEDDING_FALLBACKS: ['embedding-001'] as const,
