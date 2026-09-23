@@ -27,6 +27,13 @@ export function createApp() {
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '2mb' }));
 
+  app.get('/', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'YT StudyFlow Backend',
+    });
+  });
+
   app.use('/health', healthRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/personal-notes', personalNotesRouter);
