@@ -25,53 +25,52 @@ export function useAiReadiness(): AiReadiness {
   const keywordOnly = useRagStore((s) => s.keywordOnly);
 
   return useMemo(() => {
+    let result: AiReadiness;
     if (!authLoaded) {
-      return { state: 'loading-transcript', message: 'Loading…' };
-    }
-
-    // TODO: Re-enable auth gate when AUTH_DISABLED is false.
-    if (!AUTH_DISABLED && !user) {
-      return {
+      result = { state: 'loading-transcript', message: 'Initializing workspace…' };
+    } else if (!AUTH_DISABLED && !user) {
+      result = {
         state: 'no-auth',
         message: 'Sign in to unlock AI chat, notes, quizzes, and vector search.',
       };
-    }
-
-    if (transcriptLoading || transcriptStatus === 'loading' || transcriptStatus === 'idle') {
-      return { state: 'loading-transcript', message: 'Loading transcript…' };
-    }
-
-    if (transcriptStatus === 'no-transcript' || transcriptStatus === 'error') {
-      return {
+    } else if (transcriptLoading || transcriptStatus === 'loading' || transcriptStatus === 'idle') {
+      result = { state: 'loading-transcript', message: 'Loading transcript…' };
+    } else if (transcriptStatus === 'no-transcript' || transcriptStatus === 'error') {
+      result = {
         state: 'no-transcript',
         message: 'Transcript required. Enable CC on the video or retry in the Transcript tab.',
       };
-    }
-
-    if (!enhancedCount) {
-      return { state: 'no-transcript', message: 'Waiting for transcript segments…' };
-    }
-
-    if (ragStatus === 'building') {
-      return {
+    } else if (!enhancedCount) {
+      result = { state: 'no-transcript', message: 'Waiting for transcript segments…' };
+    } else if (ragStatus === 'building') {
+      result = {
         state: 'building-index',
         message: 'Building index from transcript…',
         stage: ragStage,
       };
-    }
-
-    if (ragStatus === 'error') {
-      return {
+    } else if (ragStatus === 'error') {
+      result = {
         state: 'index-error',
         message: ragError ?? 'Failed to build index.',
       };
+    } else if (ragStatus === 'ready' && chunkCount > 0) {
+      result = { state: 'ready', chunkCount, keywordOnly };
+    } else {
+      result = { state: 'building-index', message: 'Preparing index…', stage: ragStage };
     }
 
-    if (ragStatus === 'ready' && chunkCount > 0) {
-      return { state: 'ready', chunkCount, keywordOnly };
-    }
+    console.log('[AI READINESS DEBUG]', {
+      state: result.state,
+      authLoaded,
+      transcriptStatus,
+      transcriptLoading,
+      enhancedCount,
+      ragStatus,
+      ragStage,
+      chunkCount,
+    });
 
-    return { state: 'building-index', message: 'Preparing index…', stage: ragStage };
+    return result;
   }, [
     user,
     authLoaded,

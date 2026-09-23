@@ -22,10 +22,13 @@ export const env = {
   clerkSecretKey: process.env.CLERK_SECRET_KEY?.trim() ?? '',
   clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY?.trim() ?? '',
   geminiApiKey: required('GEMINI_API_KEY', process.env.GEMINI_API_KEY),
+  groqApiKey: process.env.GROQ_API_KEY?.trim() ?? '',
+  groqModel: process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b',
   pineconeApiKey: process.env.PINECONE_API_KEY?.trim() ?? '',
   pineconeIndex: process.env.PINECONE_INDEX?.trim() ?? 'yt-studyflow',
   pineconeNamespace: process.env.PINECONE_NAMESPACE?.trim() ?? '',
   databaseUrl: process.env.DATABASE_URL?.trim() ?? '',
+  directUrl: process.env.DIRECT_URL?.trim() ?? '',
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000),
   rateLimitMaxPerWindow: Number(process.env.RATE_LIMIT_MAX_PER_WINDOW ?? 30),
   dailyQuotaMax: Number(process.env.DAILY_QUOTA_MAX ?? 200),
@@ -34,6 +37,10 @@ export const env = {
 export function assertRuntimeConfig(): void {
   if (env.isProd && !env.geminiApiKey) {
     throw new Error('GEMINI_API_KEY is required in production');
+  }
+
+  if (env.isProd && !env.groqApiKey) {
+    throw new Error('GROQ_API_KEY is required in production for final answer generation');
   }
 
   if (env.isProd && !env.pineconeApiKey) {

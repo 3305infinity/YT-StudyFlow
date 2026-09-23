@@ -48,9 +48,9 @@ function getOrCreateHost(): HTMLElement {
     border: none;
     margin: 0;
     padding: 0;
-    background: #0b0f19;
+    background: transparent;
     pointer-events: auto;
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
     transition: top 320ms cubic-bezier(0.16, 1, 0.3, 1),
                 right 320ms cubic-bezier(0.16, 1, 0.3, 1),
                 width 320ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -86,7 +86,6 @@ function buildShadowRoot(host: HTMLElement): HTMLElement {
       width: 100%;
       height: 100%;
       font-family: Inter, 'Segoe UI', system-ui, sans-serif;
-      color: #fff;
       pointer-events: auto;
     }
     #${ROOT_ID} {
@@ -104,7 +103,7 @@ function buildShadowRoot(host: HTMLElement): HTMLElement {
     }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb { background: rgba(140, 140, 160, 0.25); border-radius: 999px; }
   `;
   shadow.appendChild(style);
 
@@ -194,8 +193,8 @@ export function expandSidebar(): void {
   host.style.width = `${UI.SIDEBAR_WIDTH}px`;
   host.style.height = '100vh';
   host.style.borderRadius = '0';
-  host.style.background = '#0b0f19';
-  host.style.boxShadow = '-8px 0 32px rgba(0, 0, 0, 0.5)';
+  host.style.background = 'transparent';
+  host.style.boxShadow = '-8px 0 32px rgba(0, 0, 0, 0.4)';
   toggleSuggestedVideosAndExpandPlayer(true);
   sidebarCollapsed = false;
 }

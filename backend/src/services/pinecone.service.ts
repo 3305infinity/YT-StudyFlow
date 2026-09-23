@@ -116,7 +116,7 @@ export const pineconeService = {
             values: number[];
             metadata: Record<string, string | number | string[]>;
           } = {
-            id: c.id,
+            id: c.id.replace(/[^\x00-\x7F]/g, ''),
             values: c.embedding,
             metadata: {
               text: c.text.slice(0, 1000),

@@ -31,7 +31,7 @@ function renderInline(text: string) {
       return (
         <code
           key={idx}
-          className="rounded bg-surface-overlay border border-line px-1.5 py-0.5 font-mono text-[12.5px] text-brand-muted"
+          className="rounded bg-surface-overlay border border-line px-1.5 py-0.5 font-mono text-[12.5px] text-purple-700 dark:text-brand-muted font-medium"
         >
           {part.slice(1, -1)}
         </code>
@@ -170,9 +170,9 @@ export function FormattedMarkdownText({
         const qTag = qMatch?.[1] || 'Question';
         const qBody = qMatch?.[2] || trimmedPara;
         return (
-          <div key={pIdx} className="mt-4 mb-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5">
+          <div key={pIdx} className="mt-4 mb-2 rounded-lg border border-amber-500/25 bg-amber-500/10 dark:bg-amber-500/5 p-3.5">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="inline-flex items-center rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-400">
+              <span className="inline-flex items-center rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-800 dark:text-amber-400">
                 {qTag}
               </span>
             </div>

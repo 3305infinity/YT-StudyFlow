@@ -3,6 +3,7 @@ import { CheckCircle2, LogOut, Sparkles, User, Lock, Mail, Loader2, AlertCircle 
 import { useSettingsStore } from '@/store/settings.store';
 import { useAuthStore } from '@/store/auth.store';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { AUTH_DISABLED } from '@lib/config/auth.config';
 
 export function SettingsPanel() {
   const { chatMode, defaultNoteType, theme, loaded, load, update } = useSettingsStore();
@@ -78,7 +79,25 @@ export function SettingsPanel() {
           <h3 className="text-sm font-semibold text-content">Account & Authentication</h3>
         </div>
 
-        {!authLoaded ? (
+        {AUTH_DISABLED ? (
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-base">
+              L
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-xs font-semibold">Local Mode Active</span>
+              </div>
+              <p className="mt-0.5 truncate text-sm font-bold text-content">
+                No sign-in required
+              </p>
+              <p className="truncate text-xs text-content-subtle">
+                AI features, chat, notes & vector search fully unlocked
+              </p>
+            </div>
+          </div>
+        ) : !authLoaded ? (
           <div className="flex items-center gap-2 py-4 text-xs text-content-subtle">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Checking authentication status…</span>

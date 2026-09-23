@@ -35,7 +35,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-function waitForTransport(maxMs = 800): Promise<boolean> {
+function waitForTransport(maxMs = 4000): Promise<boolean> {
   if (isTransportReady) return Promise.resolve(true);
 
   return new Promise((resolve) => {

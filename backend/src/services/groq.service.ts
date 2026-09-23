@@ -26,11 +26,23 @@ async function fetchLiveProductionModels(apiKey: string): Promise<string[]> {
     if (!res.ok) return [];
     const data = (await res.json()) as { data?: Array<{ id: string; active?: boolean }> };
     if (!data.data || !Array.isArray(data.data)) return [];
-    // Extract live model IDs from Groq API
-    const liveIds = data.data.map((m) => m.id);
+    // Extract live model IDs from Groq API and filter out non-chat/audio/safeguard models
+    const chatIds = data.data
+      .map((m) => m.id)
+      .filter((id) => {
+        const lower = id.toLowerCase();
+        return (
+          !lower.includes('whisper') &&
+          !lower.includes('prompt-guard') &&
+          !lower.includes('safeguard') &&
+          !lower.includes('orpheus') &&
+          !lower.includes('specdec')
+        );
+      });
+
     // Sort live models putting preferred production models first
-    return liveIds.sort((a, b) => {
-      const prefOrder = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+    return chatIds.sort((a, b) => {
+      const prefOrder = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'allam-2-7b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       const indexA = prefOrder.indexOf(a);
       const indexB = prefOrder.indexOf(b);
       if (indexA !== -1 && indexB !== -1) return indexA - indexB;

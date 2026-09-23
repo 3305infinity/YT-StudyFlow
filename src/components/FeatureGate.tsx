@@ -32,14 +32,14 @@ export function FeatureGate({
     <div
       className={
         compact
-          ? 'mx-3 my-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3'
+          ? 'mx-3 my-2 rounded-2xl border border-line bg-surface-raised px-4 py-3'
           : 'flex h-full min-h-[240px] items-center justify-center p-6'
       }
     >
       <div className={compact ? 'flex items-start gap-3' : 'max-w-sm text-center'}>
         <div className={compact ? 'shrink-0 pt-0.5' : 'mx-auto mb-3'}>{icon}</div>
         <div className={compact ? 'min-w-0' : ''}>
-          <p className="text-sm font-medium text-white">
+          <p className="text-sm font-medium text-content">
             {readiness.state === 'no-auth'
               ? 'Sign in required'
               : readiness.state === 'loading-transcript'
@@ -50,17 +50,17 @@ export function FeatureGate({
                     ? 'Index error'
                     : 'Transcript needed'}
           </p>
-          <p className="mt-1 text-xs leading-5 text-white/55">{readiness.message}</p>
+          <p className="mt-1 text-xs leading-5 text-content-muted">{readiness.message}</p>
           {'stage' in readiness && readiness.stage && (
-            <p className="mt-1 text-[11px] text-white/40">{readiness.stage}</p>
+            <p className="mt-1 text-[11px] text-content-subtle">{readiness.stage}</p>
           )}
           {readiness.state === 'no-auth' && (
             <>
-              <p className="mt-1 text-[11px] text-white/45">Free Google sign-in · no API keys</p>
+              <p className="mt-1 text-[11px] text-content-subtle">Free Google sign-in · no API keys</p>
               <button
                 type="button"
                 onClick={() => setActiveTab('settings')}
-                className="mt-3 rounded-xl bg-accent/25 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/35"
+                className="mt-3 rounded-xl bg-brand/20 px-3 py-1.5 text-xs font-medium text-content hover:bg-brand/30"
               >
                 Sign in via Profile
               </button>
@@ -70,7 +70,7 @@ export function FeatureGate({
             <button
               type="button"
               onClick={() => setActiveTab('transcript')}
-              className="mt-3 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/15"
+              className="mt-3 rounded-xl border border-line bg-surface-overlay px-3 py-1.5 text-xs font-medium text-content hover:bg-surface-raised"
             >
               Go to Transcript
             </button>

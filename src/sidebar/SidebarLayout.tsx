@@ -63,6 +63,20 @@ export function SidebarLayout({
     void loadSettings();
   }, [loadAuth, loadSettings]);
 
+  useEffect(() => {
+    const host = document.getElementById('yt-studyflow-host');
+    if (host) {
+      host.setAttribute('data-theme', theme);
+      if (theme === 'light') {
+        host.classList.add('light');
+        host.classList.remove('dark');
+      } else {
+        host.classList.add('dark');
+        host.classList.remove('light');
+      }
+    }
+  }, [theme]);
+
   const toggleDrawer = () => {
     if (isCollapsed) {
       expandSidebar();
@@ -115,7 +129,7 @@ export function SidebarLayout({
       data-theme={theme}
       className={clsx(
         'relative flex h-full flex-col overflow-hidden bg-base text-content shadow-2xl transition-colors duration-200',
-        theme === 'light' && 'light'
+        theme === 'light' ? 'light' : 'dark'
       )}
     >
       {/* ---------- Brand bar ---------- */}
@@ -151,7 +165,7 @@ export function SidebarLayout({
             onClick={toggleDrawer}
             aria-label="Collapse sidebar"
             title="Collapse sidebar to menu icon"
-            className="ds-icon-btn group relative hover:bg-surface-overlay hover:text-white"
+            className="ds-icon-btn group relative hover:bg-surface-overlay hover:text-content"
           >
             <X className="h-4 w-4 transition-transform duration-200 group-hover:rotate-90 group-hover:scale-110" />
           </button>

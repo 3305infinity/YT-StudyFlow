@@ -39,7 +39,7 @@ export function CitationGroup({
             role="listitem"
             onClick={() => onJump(c.startTime, c.videoId)}
             title={c.excerpt || 'Seek to video lecture timestamp'}
-            className="inline-flex items-center gap-1.5 rounded-full border border-brand/25 bg-brand/[0.06] px-2.5 py-1 text-[12px] font-medium text-brand-muted transition-all duration-170 hover:border-brand/50 hover:bg-brand/[0.12] hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/45"
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-[12px] font-semibold text-purple-700 dark:text-purple-300 transition-all duration-170 hover:border-brand/60 hover:bg-brand/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/45"
           >
             <Clock className="h-3 w-3 shrink-0 text-brand" aria-hidden />
             <span>Lecture · {formatTime(c.startTime)}</span>

@@ -12,13 +12,13 @@ export function WorkspaceShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-neutral-950 text-neutral-100">
-      <header className="shrink-0 border-b border-neutral-800 px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-base text-content">
+      <header className="shrink-0 border-b border-line px-4 py-3 bg-surface/50 backdrop-blur-md">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold tracking-tight text-white">{title}</h2>
+            <h2 className="text-sm font-semibold tracking-tight text-content">{title}</h2>
             {subtitle && (
-              <p className="mt-0.5 text-[11px] leading-relaxed text-neutral-500">{subtitle}</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-content-subtle">{subtitle}</p>
             )}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

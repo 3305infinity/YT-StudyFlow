@@ -14,13 +14,21 @@ export function useRagPipeline(videoId: string) {
   }, []);
 
   useEffect(() => {
+    console.log('[RAG PIPELINE DEBUG] Trigger check:', {
+      videoId,
+      transcriptStatus,
+      enhancedCount: enhancedChunks.length,
+      settingsLoaded,
+      ragStatus: status,
+    });
     if (!videoId || transcriptStatus !== 'success' || !enhancedChunks.length) return;
     if (!settingsLoaded) return;
     const t = window.setTimeout(() => {
+      console.log('[RAG PIPELINE DEBUG] Invoking buildIndex for videoId:', videoId);
       void buildIndex(videoId, enhancedChunks);
     }, 500);
     return () => window.clearTimeout(t);
-  }, [videoId, transcriptStatus, enhancedChunks.length, buildIndex, settingsLoaded]);
+  }, [videoId, transcriptStatus, enhancedChunks.length, buildIndex, settingsLoaded, status]);
 
   const rebuild = useCallback(() => {
     if (videoId && enhancedChunks.length) {

@@ -33,7 +33,6 @@
         "https://youtube.com/watch*"
       ],
       "js": ["src/content/index.ts"],
-      "css": ["src/content/content.css"],
       "run_at": "document_end"
     },
     {

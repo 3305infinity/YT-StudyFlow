@@ -67,7 +67,7 @@ function buildChunkContext(chunks: Array<{ text: string; startTime: number; endT
     .join(CHUNK_SEPARATOR);
 }
 
-function validateGroqResponse(content: string): { valid: boolean; reason?: string } {
+export function validateGroqResponse(content: string): { valid: boolean; reason?: string } {
   if (!content || content.trim().length === 0) {
     return { valid: false, reason: 'Empty content string' };
   }
@@ -111,13 +111,18 @@ export async function runAnswerGenerationPipeline(params: {
     hasContext: !!chunkContext,
   });
 
-  ragDevLog('answer-source', answerSource);
+  ragDevLog('answer-source', { answerSource });
+
+  const MAX_CONTEXT_CHARS = 16_000;
+  const safeContext = chunkContext.length > MAX_CONTEXT_CHARS
+    ? chunkContext.slice(0, MAX_CONTEXT_CHARS) + '\n... (context truncated for length)'
+    : chunkContext;
 
   const userPrompt = `Student Question: ${question}
 
 ${
-  chunkContext
-    ? `Retrieved Lecture Transcript Context:\n${chunkContext}`
+  safeContext
+    ? `Retrieved Lecture Transcript Context:\n${safeContext}`
     : `(Note: No relevant transcript content was found in the lecture for this specific question. Please answer naturally using your general knowledge.)`
 }
 
@@ -233,6 +238,63 @@ function parseAndFormatResponse(
     targetConcept: question,
     model,
     tokensUsed,
+  };
+}
+
+export function sanitizeAndValidateResponse(raw: FormattedResponse): FormattedResponse {
+  let directAnswer = raw.directAnswer
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/\[svg[^\]]*\]/gi, '')
+    .replace(/\b(svg:?\s*\w*|svg)\b/gi, '')
+    .replace(/^(welcome!?|hello!?|sure!?|great question!?)[,\s\-]*/i, '')
+    .trim();
+
+  if (directAnswer && !/[.!?]$/.test(directAnswer)) {
+    const lastPunct = Math.max(directAnswer.lastIndexOf('.'), directAnswer.lastIndexOf('!'), directAnswer.lastIndexOf('?'));
+    if (lastPunct > 0) {
+      directAnswer = directAnswer.slice(0, lastPunct + 1).trim();
+    }
+  }
+
+  const steps = (raw.steps || []).map((s) =>
+    s
+      .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+      .replace(/\b(svg:?\s*\w*|svg)\b/gi, '')
+      .replace(/\.$/, '')
+      .concat('.')
+      .trim()
+  );
+
+  const suggestedRelatedTopics = (raw.suggestedRelatedTopics || []).map((s) =>
+    s
+      .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+      .replace(/\b(svg:?\s*\w*|svg)\b/gi, '')
+      .trim()
+  );
+
+  let explanation = raw.explanation || '';
+  if (explanation.startsWith(directAnswer)) {
+    explanation = explanation.slice(directAnswer.length).replace(/^[.\s\-]+/, '').trim();
+  }
+
+  const keyTakeaways = (raw.keyTakeaways || []).filter((t) => !t.toLowerCase().includes('transcript chunk'));
+
+  const sections: ResponseSectionItem[] = [
+    ...(explanation ? [{ title: 'Explanation', content: explanation, type: 'explanation' as const }] : []),
+    ...(steps.length ? [{ title: 'Steps', content: steps.join('\n'), type: 'steps' as const, items: steps }] : []),
+    ...(raw.technicalInsight ? [{ title: 'Technical Insight', content: raw.technicalInsight, type: 'technical' as const }] : []),
+    ...(raw.applications?.length ? [{ title: 'Applications', content: raw.applications.join(', '), type: 'application' as const }] : []),
+    ...(keyTakeaways.length ? [{ title: 'Recap', content: keyTakeaways.join('\n'), type: 'recap' as const, items: keyTakeaways }] : []),
+  ];
+
+  return {
+    ...raw,
+    directAnswer,
+    explanation,
+    steps,
+    keyTakeaways,
+    sections,
+    suggestedRelatedTopics,
   };
 }
 

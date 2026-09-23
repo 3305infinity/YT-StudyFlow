@@ -112,6 +112,6 @@ describe('AI Answer Quality & Validation Layer Unit Tests', () => {
     const sanitized = sanitizeAndValidateResponse(raw);
 
     assert.equal(sanitized.keyTakeaways.length, 2);
-    assert.ok(!sanitized.keyTakeaways.some(t => t.includes('Transcript chunk')));
+    assert.ok(!sanitized.keyTakeaways.some((t: string) => t.includes('Transcript chunk')));
   });
 });

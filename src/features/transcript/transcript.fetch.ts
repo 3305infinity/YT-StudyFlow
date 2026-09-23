@@ -302,7 +302,7 @@ export async function fetchCaptionTextWithFormats(baseUrl: string, signal?: Abor
 
 export async function waitForCapturedCaptions(
   baseUrl: string,
-  maxWaitMs = 1200
+  maxWaitMs = 8000
 ): Promise<{ ok: boolean; text: string; contentType: string; via?: string }> {
 
   await triggerPlayerCaptions();

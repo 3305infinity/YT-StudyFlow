@@ -220,9 +220,11 @@ export class CacheManager {
   }
 }
 
+export type CacheManagerConfig = Partial<CacheTTLConfig> & { enabled?: boolean; cacheSize?: number };
+
 let globalCache: CacheManager | null = null;
 
-export function getCacheManager(config?: Parameters<typeof CacheManager>[0]): CacheManager {
+export function getCacheManager(config?: CacheManagerConfig): CacheManager {
   if (!globalCache) {
     globalCache = new CacheManager(config);
   }

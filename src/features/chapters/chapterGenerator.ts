@@ -6,7 +6,7 @@ import { createGeminiService } from '@/features/ai/gemini.service';
 import { buildChaptersPrompt, parseJson } from '@/features/ai/promptBuilder';
 import { localChapters } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
-import { getCurrentVideoId } from '@lib/youtube';
+import { isDifferentVideoNavigated } from '@lib/youtube';
 
 function hasDevanagari(text: string): boolean {
   return /[\u0900-\u097F]/.test(text);
@@ -32,7 +32,7 @@ export async function generateChaptersForVideo(params: {
   maxChapters?: number;
 }): Promise<Chapter[]> {
   const capturedVideoId = params.videoId;
-  const stale = () => getCurrentVideoId() !== capturedVideoId;
+  const stale = () => isDifferentVideoNavigated(capturedVideoId);
   const maxChapters = params.maxChapters ?? 8;
   const relevant = await retrieveRelevantChunks(
     'chapter structure topics sections',

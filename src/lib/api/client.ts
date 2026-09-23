@@ -44,19 +44,40 @@ async function fetchViaBackground(url: string, init: RequestInit): Promise<Proxy
     Object.assign(headers, init.headers);
   }
 
-  const result = await chrome.runtime.sendMessage({
-    type: 'YT_STUDYFLOW_API_REQUEST',
-    url,
-    method: init.method ?? 'GET',
-    headers,
-    body: typeof init.body === 'string' ? init.body : undefined,
-  });
+  const doDirectFetch = async (): Promise<ProxyResponse> => {
+    try {
+      const res = await fetch(url, init);
+      const text = await res.text();
+      return { ok: res.ok, status: res.status, text };
+    } catch (e) {
+      return { ok: false, status: 0, text: '', error: e instanceof Error ? e.message : String(e) };
+    }
+  };
 
-  if (!result || typeof result.status !== 'number') {
-    throw new ApiClientError(0, 'Extension background worker unavailable.');
+  if (typeof chrome === 'undefined' || !chrome?.runtime?.sendMessage) {
+    return doDirectFetch();
   }
 
-  return result as ProxyResponse;
+  try {
+    const messagePromise = chrome.runtime.sendMessage({
+      type: 'YT_STUDYFLOW_API_REQUEST',
+      url,
+      method: init.method ?? 'GET',
+      headers,
+      body: typeof init.body === 'string' ? init.body : undefined,
+    });
+
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+    const result = await Promise.race([messagePromise, timeoutPromise]);
+
+    if (!result || typeof (result as ProxyResponse).status !== 'number') {
+      return doDirectFetch();
+    }
+
+    return result as ProxyResponse;
+  } catch {
+    return doDirectFetch();
+  }
 }
 
 export async function apiRequest<T>(

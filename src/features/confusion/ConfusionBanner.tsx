@@ -98,16 +98,16 @@ export function AnalyticsPanel({
         </section>
 
         <section>
-          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-content-subtle">
             Confusion heatmap
           </h3>
           <div className="relative mt-2">
-            <div className="flex h-12 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
+            <div className="flex h-12 overflow-hidden rounded-lg border border-line bg-surface-raised">
               {(buckets.length ? buckets : [{ startTime: 0, endTime: 1, density: 0 }]).map((b) => (
                 <button
                   key={b.startTime}
                   type="button"
-                  className="h-full min-w-[3px] flex-1 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+                  className="h-full min-w-[3px] flex-1 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-1 focus-visible:ring-brand"
                   style={{ background: `rgba(239,68,68,${0.06 + b.density * 0.9})` }}
                   onMouseEnter={() => setHoverBucket(b)}
                   onMouseLeave={() => setHoverBucket(null)}
@@ -118,11 +118,11 @@ export function AnalyticsPanel({
             </div>
 
             {hoverBucket && hoverStats && (
-              <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-[11px] shadow-lg">
-                <p className="font-medium text-white">
+              <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-line bg-surface-overlay px-3 py-2 text-[11px] shadow-lg">
+                <p className="font-medium text-content">
                   {formatTime(hoverBucket.startTime)} – {formatTime(hoverBucket.endTime)}
                 </p>
-                <p className="mt-1 text-neutral-400">
+                <p className="mt-1 text-content-muted">
                   Confusion {(hoverStats.confusionScore * 100).toFixed(0)}% · Rewinds {hoverStats.rewinds} ·
                   Pauses {hoverStats.pauses + hoverStats.longPauses} · Seeks {hoverStats.seeks}
                 </p>
@@ -130,7 +130,7 @@ export function AnalyticsPanel({
             )}
 
             {analyticsDuration > 0 && (
-              <div className="mt-1 flex justify-between font-mono text-[10px] text-neutral-600">
+              <div className="mt-1 flex justify-between font-mono text-[10px] text-content-subtle">
                 <span>0:00</span>
                 <span>{formatTime(analyticsDuration)}</span>
               </div>
@@ -139,11 +139,11 @@ export function AnalyticsPanel({
         </section>
 
         <section>
-          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-content-subtle">
             Weak topics
           </h3>
           {zones.length === 0 ? (
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-content-subtle">
               Rewind or pause on difficult sections — they will appear here.
             </p>
           ) : (
@@ -153,15 +153,15 @@ export function AnalyticsPanel({
                   key={`${z.startTime}-${z.endTime}`}
                   type="button"
                   onClick={() => onJumpToTime(z.startTime)}
-                  className="flex w-full items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-left hover:bg-amber-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
+                  className="flex w-full items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-left hover:bg-amber-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
                 >
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
                   <div>
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-semibold text-content">
                       {formatTime(z.startTime)} – {formatTime(z.endTime)}
                     </p>
-                    <p className="mt-0.5 text-xs text-neutral-400">{z.reasons.join(' · ')}</p>
-                    <p className="text-[10px] text-amber-200/70">
+                    <p className="mt-0.5 text-xs text-content-muted">{z.reasons.join(' · ')}</p>
+                    <p className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold">
                       Difficulty {(z.score * 100).toFixed(0)}%
                     </p>
                   </div>
@@ -175,9 +175,9 @@ export function AnalyticsPanel({
           <button
             type="button"
             onClick={() => onJumpToTime(stats.mostReplayedTime!)}
-            className="flex w-full items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-2.5 text-left text-xs text-neutral-400 hover:border-neutral-700"
+            className="flex w-full items-center gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2.5 text-left text-xs text-content-muted hover:border-line-strong hover:bg-surface-overlay"
           >
-            <Brain className="h-4 w-4 text-indigo-400" />
+            <Brain className="h-4 w-4 text-brand" />
             Most replayed: {formatTime(stats.mostReplayedTime)}
           </button>
         )}
@@ -188,10 +188,10 @@ export function AnalyticsPanel({
 
 function MetricCard({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
-      <p className="text-[10px] text-neutral-600">{sub}</p>
+    <div className="rounded-lg border border-line bg-surface-raised px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-content-subtle">{label}</p>
+      <p className="mt-1 text-xl font-bold text-content">{value}</p>
+      <p className="text-[10px] text-content-faint">{sub}</p>
     </div>
   );
 }
@@ -206,12 +206,12 @@ function StatCard({
   value: number;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-neutral-500">
+    <div className="rounded-lg border border-line bg-surface-raised px-3 py-2">
+      <div className="flex items-center gap-1.5 text-content-subtle">
         <Icon className="h-3.5 w-3.5" />
         <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
       </div>
-      <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+      <p className="mt-1 text-lg font-bold text-content">{value}</p>
     </div>
   );
 }

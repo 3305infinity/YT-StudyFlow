@@ -11,11 +11,6 @@ import { useVideoStore } from '@store/video.store';
 export function useVideo(videoId: string) {
   const { setVideo, setMetadata, setCurrentTime } = useVideoStore();
 
-  useEffect(() => {
-    if (!videoId) return;
-    setVideo(videoId);
-  }, [videoId, setVideo]);
-
   const loadVideo = useCallback(async () => {
     if (!videoId) return;
 
@@ -56,6 +51,12 @@ export function useVideo(videoId: string) {
       }
     }
   }, [videoId, setMetadata]);
+
+  useEffect(() => {
+    if (!videoId) return;
+    setVideo(videoId);
+    void loadVideo();
+  }, [videoId, setVideo, loadVideo]);
 
   useEffect(() => {
     const onTime = (e: Event) => {

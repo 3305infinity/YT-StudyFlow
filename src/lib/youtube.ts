@@ -32,6 +32,12 @@ export function getCurrentVideoId(): string | null {
   return extractVideoId(window.location.href);
 }
 
+/** Returns true ONLY if the user navigated to a DIFFERENT valid YouTube video ID. */
+export function isDifferentVideoNavigated(targetVideoId: string): boolean {
+  const currentOnPage = getCurrentVideoId();
+  return Boolean(currentOnPage && currentOnPage !== targetVideoId);
+}
+
 export function isYouTubeWatchPage(): boolean {
   return (
     window.location.hostname.includes('youtube.com') &&
@@ -68,15 +74,27 @@ export function formatTime(seconds: number): string {
 }
 
 export function getVideoTitleFromPage(): string | null {
-  const meta = document.querySelector('meta[name="title"]');
-  if (meta?.getAttribute('content')) {
-    return meta.getAttribute('content');
+  const h1 = document.querySelector(
+    'h1.ytd-watch-metadata yt-formatted-string, ytd-watch-metadata h1, h1.ytd-video-primary-info-renderer, #title h1, h1.ytd-watch-flexy'
+  );
+  const h1Text = h1?.textContent?.trim();
+  if (h1Text) {
+    return h1Text;
   }
 
-  const h1 = document.querySelector(
-    'h1.ytd-watch-metadata yt-formatted-string, h1 yt-formatted-string, #title h1'
-  );
-  return h1?.textContent?.trim() ?? null;
+  const docTitle = document.title;
+  if (docTitle && docTitle.includes('- YouTube')) {
+    const cleaned = docTitle.replace(/\s*-\s*YouTube\s*$/i, '').trim();
+    if (cleaned && cleaned !== 'YouTube') return cleaned;
+  }
+
+  const meta = document.querySelector('meta[name="title"]');
+  const metaTitle = meta?.getAttribute('content')?.trim();
+  if (metaTitle) {
+    return metaTitle;
+  }
+
+  return null;
 }
 
 export function getChannelNameFromPage(): string | null {

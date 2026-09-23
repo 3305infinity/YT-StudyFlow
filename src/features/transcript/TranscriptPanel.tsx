@@ -14,9 +14,8 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import type { EnhancedTranscriptChunk } from '@/types/transcript';
+import type { ResponseLanguageId } from '@lib/languages';
 import { useTranscriptStore } from './transcript.store';
-import { useSettingsStore } from '@/store/settings.store';
-import { languageLabel } from '@lib/localization.service';
 import { formatTime } from '@lib/youtube';
 
 function highlightText(text: string, query: string): React.ReactNode {
@@ -26,7 +25,7 @@ function highlightText(text: string, query: string): React.ReactNode {
   const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
   return parts.map((part, i) =>
     part.toLowerCase() === q.toLowerCase() ? (
-      <mark key={i} className="rounded bg-amber-400/25 text-amber-50 px-0.5">
+      <mark key={i} className="rounded bg-amber-300/60 dark:bg-amber-400/25 text-amber-950 dark:text-amber-50 px-0.5 font-medium">
         {part}
       </mark>
     ) : (
@@ -94,8 +93,8 @@ function TranscriptBlock({
         clsx(
           'group relative grid grid-cols-[4.5rem_1fr] gap-x-3 border-l-2 py-3 pl-3 pr-2 transition-colors',
           isActive
-            ? 'border-l-indigo-400 bg-indigo-500/10'
-            : 'border-l-transparent hover:border-l-white/15 hover:bg-white/[0.03]'
+            ? 'border-l-brand bg-brand/10'
+            : 'border-l-transparent hover:border-l-brand/30 hover:bg-surface-raised/50'
         )
       )}
     >
@@ -106,8 +105,8 @@ function TranscriptBlock({
           clsx(
             'self-start rounded-md px-1.5 py-0.5 text-left font-mono text-[11px] tabular-nums transition-colors',
             isActive
-              ? 'bg-indigo-500/25 font-medium text-indigo-100'
-              : 'text-white/45 group-hover:text-indigo-200'
+              ? 'bg-brand/20 font-semibold text-brand'
+              : 'text-content-subtle group-hover:text-brand'
           )
         )}
       >
@@ -118,7 +117,7 @@ function TranscriptBlock({
         className={twMerge(
           clsx(
             'text-[13px] leading-[1.65] tracking-[0.01em]',
-            isActive ? 'text-white' : 'text-white/78 group-hover:text-white/92'
+            isActive ? 'text-content font-medium' : 'text-content-muted group-hover:text-content'
           )
         )}
       >
@@ -130,13 +129,13 @@ function TranscriptBlock({
 
 function SkeletonRows() {
   return (
-    <div className="divide-y divide-white/5">
+    <div className="divide-y divide-line/40">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="grid grid-cols-[4.5rem_1fr] gap-3 px-3 py-3 animate-shimmer">
-          <div className="h-5 w-12 rounded bg-white/10" />
+          <div className="h-5 w-12 rounded bg-surface-raised" />
           <div className="space-y-2">
-            <div className="h-3 w-full rounded bg-white/10" />
-            <div className="h-3 w-5/6 rounded bg-white/10" />
+            <div className="h-3 w-full rounded bg-surface-raised" />
+            <div className="h-3 w-5/6 rounded bg-surface-raised" />
           </div>
         </div>
       ))}
@@ -170,8 +169,6 @@ export function TranscriptPanel({
     setTranslationView,
     loadTranslation,
   } = useTranscriptStore();
-
-  const responseLanguage = useSettingsStore((s) => s.responseLanguage);
 
   const listRef = useRef<HTMLDivElement>(null);
   const activeChunk = activeChunkIndex >= 0 ? enhancedChunks[activeChunkIndex] : null;
@@ -232,18 +229,18 @@ export function TranscriptPanel({
   };
 
   return (
-    <div data-testid="transcript-panel" className="flex h-full min-h-0 flex-col">
-      <div className="sticky top-0 z-10 border-b border-white/8 bg-surface/95 backdrop-blur-xl">
+    <div data-testid="transcript-panel" className="flex h-full min-h-0 flex-col bg-base text-content">
+      <div className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur-xl">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <Captions className="h-4 w-4 shrink-0 text-indigo-300" />
-                <h2 className="truncate text-sm font-semibold text-white">Transcript</h2>
+                <Captions className="h-4 w-4 shrink-0 text-brand" />
+                <h2 className="truncate text-sm font-semibold text-content">Transcript</h2>
               </div>
-              <p className="mt-0.5 truncate text-[11px] text-white/45">{stats}</p>
+              <p className="mt-0.5 truncate text-[11px] text-content-subtle">{stats}</p>
               {language && status === 'success' && (
-                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-white/40">
+                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-content-faint">
                   <Languages className="h-3 w-3" />
                   {language.toUpperCase()}
                   {isAutoGenerated ? ' · auto' : ' · manual'}
@@ -251,72 +248,84 @@ export function TranscriptPanel({
               )}
             </div>
 
-            <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-white/8 bg-white/[0.03] p-0.5">
-              <button type="button" onClick={() => onReload?.()} className="rounded-lg p-1.5 text-white/60 hover:bg-white/8 hover:text-white" title="Reload">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-line bg-surface-raised p-0.5">
+              <button type="button" onClick={() => onReload?.()} className="rounded-lg p-1.5 text-content-subtle hover:bg-surface-overlay hover:text-content" title="Reload">
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
-              <button type="button" onClick={jumpPrev} disabled={activeChunkIndex <= 0} className="rounded-lg p-1.5 text-white/60 hover:bg-white/8 disabled:opacity-30" title="Previous">
+              <button type="button" onClick={jumpPrev} disabled={activeChunkIndex <= 0} className="rounded-lg p-1.5 text-content-subtle hover:bg-surface-overlay disabled:opacity-30" title="Previous">
                 <SkipBack className="h-3.5 w-3.5" />
               </button>
-              <button type="button" onClick={jumpNext} disabled={activeChunkIndex < 0 || activeChunkIndex >= enhancedChunks.length - 1} className="rounded-lg p-1.5 text-white/60 hover:bg-white/8 disabled:opacity-30" title="Next">
+              <button type="button" onClick={jumpNext} disabled={activeChunkIndex < 0 || activeChunkIndex >= enhancedChunks.length - 1} className="rounded-lg p-1.5 text-content-subtle hover:bg-surface-overlay disabled:opacity-30" title="Next">
                 <SkipForward className="h-3.5 w-3.5" />
               </button>
-              <button type="button" onClick={scrollToActive} disabled={!activeChunk} className="rounded-lg p-1.5 text-white/60 hover:bg-white/8 disabled:opacity-30" title="Current">
+              <button type="button" onClick={scrollToActive} disabled={!activeChunk} className="rounded-lg p-1.5 text-content-subtle hover:bg-surface-overlay disabled:opacity-30" title="Current">
                 <LocateFixed className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
 
           <div className="relative mt-2.5">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-content-subtle" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search…"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-indigo-400/40 focus:outline-none focus:ring-1 focus:ring-indigo-400/25"
+              className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-content placeholder:text-content-subtle focus:border-brand/40 focus:outline-none focus:ring-1 focus:ring-brand/25"
             />
           </div>
 
           {status === 'success' && enhancedChunks.length > 0 && (
-            <div className="mt-2 flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
+            <div className="mt-2 flex items-center gap-1 rounded-xl border border-line bg-surface-raised p-0.5">
               <button
                 type="button"
                 onClick={() => setTranslationView('original')}
                 className={twMerge(
                   clsx(
-                    'flex-1 rounded-lg py-1.5 text-[10px] font-medium',
-                    viewMode === 'original' ? 'bg-white/10 text-white' : 'text-white/50'
+                    'flex-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors',
+                    viewMode === 'original'
+                      ? 'bg-brand-gradient text-white font-semibold shadow-cta'
+                      : 'text-content-subtle hover:text-content'
                   )
                 )}
               >
-                Original
+                Original {language ? `(${language.toUpperCase()})` : ''}
               </button>
-              <button
-                type="button"
-                disabled={translationLoading}
-                onClick={() => {
-                  if (translationLanguage === responseLanguage && viewMode === 'translated') {
-                    setTranslationView('translated');
-                    return;
-                  }
-                  void loadTranslation(responseLanguage);
-                }}
-                className={twMerge(
-                  clsx(
-                    'flex-1 rounded-lg py-1.5 text-[10px] font-medium',
-                    viewMode === 'translated' ? 'bg-white/10 text-white' : 'text-white/50',
-                    translationLoading && 'animate-pulse'
-                  )
-                )}
-              >
-                {translationLoading
-                  ? 'Translating…'
-                  : `Translated (${languageLabel(responseLanguage)})`}
-              </button>
+
+              {((language || '').toLowerCase().startsWith('en') ? ['es', 'fr'] : ['en']).map((targetLang) => {
+                const targetLabel = targetLang === 'en' ? 'English' : targetLang === 'es' ? 'Spanish' : 'French';
+                const isSelected = viewMode === 'translated' && translationLanguage === targetLang;
+                const isLoadingThis = translationLoading && translationLanguage === targetLang;
+
+                return (
+                  <button
+                    key={targetLang}
+                    type="button"
+                    disabled={translationLoading}
+                    onClick={() => {
+                      if (isSelected) {
+                        setTranslationView('translated');
+                        return;
+                      }
+                      void loadTranslation(targetLang as ResponseLanguageId);
+                    }}
+                    className={twMerge(
+                      clsx(
+                        'flex-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors',
+                        isSelected
+                          ? 'bg-brand-gradient text-white font-semibold shadow-cta'
+                          : 'text-content-subtle hover:text-content',
+                        isLoadingThis && 'animate-pulse'
+                      )
+                    )}
+                  >
+                    {isLoadingThis ? 'Translating…' : targetLabel}
+                  </button>
+                );
+              })}
             </div>
           )}
           {translationError && (
-            <p className="mt-1.5 text-[10px] text-red-300">{translationError}</p>
+            <p className="mt-1.5 text-[10px] text-danger">{translationError}</p>
           )}
         </div>
       </div>
@@ -331,17 +340,17 @@ export function TranscriptPanel({
 
           {!loading && availability === 'no-transcript' && (
             <motion.div key="empty" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-                <div className="flex items-center gap-2 text-white/90">
-                  <Sparkles className="h-4 w-4 text-indigo-300" />
+              <div className="rounded-2xl border border-line bg-surface-raised p-5">
+                <div className="flex items-center gap-2 text-content">
+                  <Sparkles className="h-4 w-4 text-brand" />
                   <p className="text-sm font-medium">No transcript available</p>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-white/55">
+                <p className="mt-2 text-sm leading-6 text-content-muted">
                   {error?.message ??
                     'StudyFlow turns on captions automatically. If this video has no subtitles, none are available. Otherwise click Retry.'}
                 </p>
                 {onReload && (
-                  <button type="button" onClick={onReload} className="mt-3 rounded-xl bg-indigo-500/20 px-3 py-2 text-xs text-white hover:bg-indigo-500/30">
+                  <button type="button" onClick={onReload} className="mt-3 rounded-xl bg-brand/15 px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/25">
                     Retry
                   </button>
                 )}
@@ -351,15 +360,15 @@ export function TranscriptPanel({
 
           {!loading && status === 'error' && (
             <motion.div key="error" className="p-4">
-              <div className="rounded-2xl border border-red-500/25 bg-red-500/8 p-5">
-                <p className="text-sm font-medium text-red-100">Could not load transcript</p>
-                <p className="mt-2 text-sm text-red-100/75">{error?.message}</p>
+              <div className="rounded-2xl border border-danger/30 bg-danger/10 p-5">
+                <p className="text-sm font-medium text-danger">Could not load transcript</p>
+                <p className="mt-2 text-sm text-danger/80">{error?.message}</p>
               </div>
             </motion.div>
           )}
 
           {!loading && enhancedChunks.length > 0 && (
-            <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="divide-y divide-white/[0.04] px-1 py-1">
+            <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="divide-y divide-line/40 px-1 py-1">
               {displayBlocks.map((block) => (
                 <TranscriptBlock
                   key={block.id}
@@ -371,7 +380,7 @@ export function TranscriptPanel({
               ))}
 
               {displayBlocks.length === 0 && (
-                <div className="p-6 text-center text-sm text-white/50">
+                <div className="p-6 text-center text-sm text-content-subtle">
                   No matches for &ldquo;{searchQuery}&rdquo;
                 </div>
               )}

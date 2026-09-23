@@ -132,11 +132,11 @@ function pageFetchInMainWorld(
     xhr.open(method, url, false);
     xhr.timeout = 12000;
 
-    xhr.setRequestHeader('Content-Type', 'application/json');
+    if (body) {
+      xhr.setRequestHeader('Content-Type', 'application/json');
+    }
     for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase() !== 'content-type') {
-        xhr.setRequestHeader(key, value);
-      }
+      xhr.setRequestHeader(key, value);
     }
 
     xhr.send(body);

@@ -18,8 +18,9 @@ export type ResponseLanguage = {
 /** Initial launch languages — add entries here to expand UI without refactoring. */
 export const INITIAL_RESPONSE_LANGUAGES: ResponseLanguage[] = [
   { id: 'en', label: 'English', nativeLabel: 'English' },
-  { id: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी' },
-  { id: 'hinglish', label: 'Hinglish', nativeLabel: 'Hinglish' },
+  { id: 'es', label: 'Spanish', nativeLabel: 'Español' },
+  { id: 'fr', label: 'French', nativeLabel: 'Français' },
+  { id: 'de', label: 'German', nativeLabel: 'Deutsch' },
 ];
 
 /** Full catalog for normalization of persisted settings. */

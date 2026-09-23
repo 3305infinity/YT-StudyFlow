@@ -227,7 +227,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className={clsx('h-full w-full font-sans transition-colors duration-200', theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-base text-content')}>
+    <div className="h-full w-full font-sans bg-base text-content transition-colors duration-200">
       <WorkspaceShell
         title="Notes Workspace"
         subtitle="Structured AI study notes & personal notebook"
@@ -238,12 +238,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
               type="button"
               onClick={toggleTheme}
               title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-              className={clsx(
-                'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
-                theme === 'light'
-                  ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                  : 'border-line bg-surface-raised text-content-muted hover:bg-surface-overlay hover:text-content'
-              )}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-raised px-2.5 py-1.5 text-xs font-medium text-content-muted transition-colors hover:bg-surface-overlay hover:text-content"
             >
               {theme === 'dark' ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-indigo-600" />}
               <span className="hidden sm:inline">{theme === 'dark' ? 'Light' : 'Dark'}</span>
@@ -274,7 +269,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
       >
         <div className="flex h-full min-h-0 flex-col">
           {/* Mode Switcher: AI Notes vs My Notes */}
-          <div className={clsx('flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 shrink-0', theme === 'light' ? 'border-slate-200 bg-white' : 'border-line bg-surface')}>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -312,12 +307,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                     type="button"
                     disabled={loading}
                     onClick={() => generate({ videoId, type: t.id, chunks, videoTitle: title ?? undefined })}
-                    className={clsx(
-                      'shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-40',
-                      theme === 'light'
-                        ? 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        : 'border-line bg-surface-raised text-content-muted hover:text-content'
-                    )}
+                    className="shrink-0 rounded-md border border-line bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-content-muted transition-all hover:bg-surface-overlay hover:text-content disabled:opacity-40"
                   >
                     + {t.label}
                   </button>
@@ -362,10 +352,8 @@ export function NotesPanel({ videoId }: { videoId: string }) {
             <aside
               style={{ width: isCollapsed ? '0px' : `${sidebarWidth}px` }}
               className={clsx(
-                'shrink-0 overflow-y-auto space-y-1.5 transition-all duration-75 border-r',
-                isCollapsed && 'w-0 p-0 border-none overflow-hidden opacity-0 pointer-events-none',
-                !isCollapsed && 'p-2',
-                theme === 'light' ? 'border-slate-200 bg-slate-100/60' : 'border-line bg-surface'
+                'shrink-0 overflow-y-auto space-y-1.5 transition-all duration-75 border-r border-line bg-surface p-2',
+                isCollapsed && 'w-0 p-0 border-none overflow-hidden opacity-0 pointer-events-none'
               )}
             >
               <div className="flex items-center justify-between px-1 py-1">
@@ -396,21 +384,17 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                         className={clsx(
                           'w-full rounded-lg p-2 text-left transition-all duration-170 border',
                           isSelected
-                            ? theme === 'light'
-                              ? 'border-indigo-400 bg-white text-slate-900 shadow-sm'
-                              : 'border-brand/40 bg-surface-overlay text-content shadow-1'
-                            : theme === 'light'
-                              ? 'border-transparent text-slate-700 hover:bg-slate-200/70'
-                              : 'border-transparent text-content-muted hover:bg-surface-raised'
+                            ? 'border-brand/40 bg-surface-overlay text-content shadow-sm font-semibold'
+                            : 'border-transparent text-content-muted hover:bg-surface-raised'
                         )}
                       >
                         <div className="flex items-center justify-between gap-1 mb-0.5">
                           <span className={clsx(
                             'inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold capitalize',
                             n.type === 'interview'
-                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                               : n.type === 'revision'
-                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                                 : 'bg-brand/15 text-brand border border-brand/30'
                           )}>
                             {n.type}
@@ -436,16 +420,12 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                         className={clsx(
                           'w-full rounded-lg p-2 text-left transition-all duration-170 border',
                           isSelected
-                            ? theme === 'light'
-                              ? 'border-indigo-400 bg-white text-slate-900 shadow-sm'
-                              : 'border-brand/40 bg-surface-overlay text-content shadow-1'
-                            : theme === 'light'
-                              ? 'border-transparent text-slate-700 hover:bg-slate-200/70'
-                              : 'border-transparent text-content-muted hover:bg-surface-raised'
+                            ? 'border-brand/40 bg-surface-overlay text-content shadow-sm font-semibold'
+                            : 'border-transparent text-content-muted hover:bg-surface-raised'
                         )}
                       >
                         <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <span className="inline-flex items-center rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-400 border border-indigo-500/30">
+                          <span className="inline-flex items-center rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
                             Personal
                           </span>
                           <span className="text-[9px] text-content-subtle shrink-0">{formatTimeAgo(p.updatedAt)}</span>
@@ -473,7 +453,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
             )}
 
             {/* Note Detail / Editor Area (Spacious Width) */}
-            <main className={clsx('min-h-0 flex-1 min-w-0 overflow-y-auto px-3.5 py-4 sm:px-5 sm:py-5', theme === 'light' ? 'bg-white text-slate-900' : 'bg-base text-content')}>
+            <main className="min-h-0 flex-1 min-w-0 overflow-y-auto px-3.5 py-4 sm:px-5 sm:py-5 bg-base text-content">
               {workspaceMode === 'ai' ? (
                 activeAiNote ? (
                   <div className="w-full max-w-full space-y-5">
@@ -547,12 +527,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                         <textarea
                           value={draft}
                           onChange={(e) => setDraft(e.target.value)}
-                          className={clsx(
-                            'min-h-[360px] w-full rounded-xl border p-4 font-mono text-[14px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-brand/40',
-                            theme === 'light'
-                              ? 'border-slate-300 bg-slate-50 text-slate-900'
-                              : 'border-line bg-surface text-content'
-                          )}
+                          className="min-h-[360px] w-full rounded-xl border border-line bg-surface p-4 font-mono text-[14px] leading-relaxed text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand/40"
                           aria-label="Edit note content"
                         />
                       </div>
@@ -593,7 +568,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                             <ChevronRight className="h-3.5 w-3.5" />
                           </button>
                         )}
-                        <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-400">
+                        <span className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                           Personal Note
                         </span>
                         <span className="text-xs text-content-subtle">
@@ -643,10 +618,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                         type="text"
                         value={personalTitleDraft}
                         onChange={(e) => setPersonalTitleDraft(e.target.value)}
-                        className={clsx(
-                          'w-full rounded-lg border px-3 py-1.5 text-base font-bold text-content focus:outline-none focus:ring-2 focus:ring-brand/40',
-                          theme === 'light' ? 'border-slate-300 bg-slate-50' : 'border-line bg-surface'
-                        )}
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-base font-bold text-content focus:outline-none focus:ring-2 focus:ring-brand/40"
                         placeholder="Note Title..."
                       />
                     ) : (
@@ -663,12 +635,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
                         value={personalContentDraft}
                         onChange={(e) => setPersonalContentDraft(e.target.value)}
                         placeholder="Write your study notes, insights, key takeaways..."
-                        className={clsx(
-                          'min-h-[360px] w-full rounded-xl border p-4 font-mono text-[14px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-brand/40',
-                          theme === 'light'
-                            ? 'border-slate-300 bg-slate-50 text-slate-900'
-                            : 'border-line bg-surface text-content'
-                        )}
+                        className="min-h-[360px] w-full rounded-xl border border-line bg-surface p-4 font-mono text-[14px] leading-relaxed text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand/40"
                       />
                     </div>
                   ) : (
@@ -689,7 +656,7 @@ export function NotesPanel({ videoId }: { videoId: string }) {
               ) : (
                 <div className="flex h-full flex-col items-center justify-center py-16 text-center">
                   <div className="rounded-full bg-indigo-500/10 p-4 mb-3">
-                    <BookOpen className="h-8 w-8 text-indigo-400" />
+                    <BookOpen className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <h3 className="text-subheading font-bold text-content">No Personal Notes Yet</h3>
                   <p className="mt-1 text-caption text-content-subtle max-w-sm">

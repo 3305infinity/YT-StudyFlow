@@ -6,7 +6,7 @@ import { canUseGeminiApi, getSettings } from '@lib/storage';
 import { localNotes } from '@/features/ai/localGeneration';
 import { retrieveRelevantChunks } from '@/features/ai/ragPipeline.service';
 import { scheduleSync, syncVideoScope } from '@/lib/sync/engine';
-import { getCurrentVideoId } from '@lib/youtube';
+import { isDifferentVideoNavigated } from '@lib/youtube';
 import { api } from '@/lib/api/client';
 
 export async function generateNote(params: {
@@ -19,7 +19,7 @@ export async function generateNote(params: {
 }): Promise<Note> {
   const includeTimestamps = params.includeTimestamps ?? true;
   const capturedVideoId = params.videoId;
-  const stale = () => getCurrentVideoId() !== capturedVideoId;
+  const stale = () => isDifferentVideoNavigated(capturedVideoId);
 
   if (stale()) throw new Error('Video changed before note generation');
 

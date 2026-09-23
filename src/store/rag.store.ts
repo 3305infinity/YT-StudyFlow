@@ -9,7 +9,7 @@ import { usePlaylistStore } from '@/store/playlist.store';
 import { friendlyAiError, isGeminiQuotaError } from '@lib/aiErrors';
 import { AUTH_DISABLED } from '@lib/config/auth.config';
 import { checkBackendHealth } from '@lib/api/client';
-import { getCurrentVideoId } from '@lib/youtube';
+import { isDifferentVideoNavigated, getCurrentVideoId } from '@lib/youtube';
 
 interface RagState {
   videoId: string | null;
@@ -31,29 +31,56 @@ export const useRagStore = create<RagState>((set, get) => ({
   keywordOnly: false,
 
   buildIndex: async (videoId, enhancedChunks) => {
+    console.log('[RAG STORE DEBUG] buildIndex called:', {
+      videoId,
+      chunkCount: enhancedChunks.length,
+    });
     if (!enhancedChunks.length) return;
     const state = get();
-    if (state.videoId === videoId && state.status === 'building') return;
-    if (state.videoId === videoId && state.status === 'ready' && state.chunks.length) return;
+    if (state.videoId === videoId && state.status === 'building') {
+      console.log('[RAG STORE DEBUG] already building for videoId:', videoId);
+      return;
+    }
+    if (state.videoId === videoId && state.status === 'ready' && state.chunks.length) {
+      console.log('[RAG STORE DEBUG] already ready for videoId:', videoId);
+      return;
+    }
 
     set({ videoId, status: 'building', error: null, stage: 'Starting…', keywordOnly: false });
+
+    const navGuard = (label: string): boolean => {
+      const different = isDifferentVideoNavigated(videoId);
+      console.log(`[RAG PIPELINE DEBUG] navigation guard @ ${label}`, {
+        targetVideoId: videoId,
+        currentVideoId: getCurrentVideoId(),
+        differentVideo: different,
+      });
+      if (different) {
+        set({ status: 'idle', stage: '', error: null });
+      }
+      return different;
+    };
+
     try {
       const meta = indexMetaFromPage();
-      if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+      if (navGuard('indexMetaFromPage')) return;
+
+      console.log('[RAG STORE DEBUG] checking backend health…');
       const backendOnline = await checkBackendHealth();
-      if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+      console.log('[RAG STORE DEBUG] backend online:', backendOnline);
+      if (navGuard('checkBackendHealth')) return;
 
       // TODO: Re-enable auth check when AUTH_DISABLED is false.
       if (!AUTH_DISABLED) {
-        if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+        if (navGuard('auth-pre-check')) return;
         const { isAuthenticated } = await import('@lib/api/auth');
         const authed = await isAuthenticated();
-        if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+        if (navGuard('isAuthenticated')) return;
         if (!authed) {
           const chunks = await buildKeywordOnlyIndex(videoId, enhancedChunks, (stage) =>
             set({ stage }), meta
           );
-          if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+          if (navGuard('keyword-unauthd')) return;
           void usePlaylistStore.getState().registerCurrentVideo(videoId, meta.videoTitle);
           void usePlaylistStore.getState().refreshPlaylistChunks();
           set({
@@ -67,10 +94,11 @@ export const useRagStore = create<RagState>((set, get) => ({
       }
 
       if (!backendOnline) {
+        console.log('[RAG STORE DEBUG] backend offline — using keyword-only index');
         const chunks = await buildKeywordOnlyIndex(videoId, enhancedChunks, (stage) =>
           set({ stage }), meta
         );
-        if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+        if (navGuard('keyword-backend-offline')) return;
         void usePlaylistStore.getState().registerCurrentVideo(videoId, meta.videoTitle);
         void usePlaylistStore.getState().refreshPlaylistChunks();
         set({
@@ -82,12 +110,15 @@ export const useRagStore = create<RagState>((set, get) => ({
         return;
       }
 
-      const chunks = await buildSemanticIndex(videoId, enhancedChunks, (stage) =>
-        set({ stage }), meta
-      );
-      if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+      console.log('[RAG STORE DEBUG] starting semantic index (Pinecone)…');
+      const chunks = await buildSemanticIndex(videoId, enhancedChunks, (stage) => {
+        console.log('[RAG STORE DEBUG] semantic stage:', stage);
+        set({ stage });
+      }, meta);
+      if (navGuard('buildSemanticIndex-done')) return;
       void usePlaylistStore.getState().registerCurrentVideo(videoId, meta.videoTitle);
       void usePlaylistStore.getState().refreshPlaylistChunks();
+      console.log('[RAG STORE DEBUG] ✅ RAG ready — chunks:', chunks.length);
       set({
         chunks,
         status: 'ready',
@@ -96,12 +127,12 @@ export const useRagStore = create<RagState>((set, get) => ({
       });
     } catch (e) {
       if (isGeminiQuotaError(e)) {
-        if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+        if (navGuard('gemini-quota-catch')) return;
         try {
           const chunks = await buildKeywordOnlyIndex(videoId, enhancedChunks, (stage) =>
             set({ stage }), indexMetaFromPage()
           );
-          if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+          if (navGuard('keyword-quota-fallback')) return;
           set({
             chunks,
             status: 'ready',
@@ -114,7 +145,7 @@ export const useRagStore = create<RagState>((set, get) => ({
           // fall through
         }
       }
-      if (getCurrentVideoId() !== videoId) { set({ status: 'idle', stage: '', error: null }); return; }
+      if (navGuard('error-handler')) return;
       set({
         status: 'error',
         error: friendlyAiError(e),

@@ -185,36 +185,36 @@ export function StudyPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-white/10 bg-gradient-to-r from-violet-500/15 to-indigo-500/10 px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-base text-content">
+      <div className="border-b border-line bg-surface-raised px-4 py-3">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-violet-300" />
-          <h2 className="text-sm font-semibold text-white">Study tutor</h2>
+          <BookOpen className="h-4 w-4 text-brand" />
+          <h2 className="text-sm font-semibold text-content">Study tutor</h2>
         </div>
-        <p className="mt-1 text-[11px] leading-5 text-white/50">
+        <p className="mt-1 text-[11px] leading-5 text-content-subtle">
           Retrieval-backed paths · real timestamps · adaptive level
         </p>
         {playlist ? (
-          <p className="mt-2 text-xs text-indigo-200/90">
+          <p className="mt-2 text-xs font-medium text-brand">
             {playlist.title} · {indexedVideoCount} indexed / {playlist.videoIds.length} in playlist
           </p>
         ) : (
-          <p className="mt-2 text-xs text-white/45">Single-video mode · add ?list= for playlist RAG</p>
+          <p className="mt-2 text-xs text-content-faint">Single-video mode · add ?list= for playlist RAG</p>
         )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
         {!plan && (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 space-y-3">
-            <label className="text-xs font-medium text-white/55">Topic</label>
+          <div className="rounded-2xl border border-line bg-surface-raised p-4 space-y-3">
+            <label className="text-xs font-medium text-content-subtle">Topic</label>
             <input
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="e.g. Teach me DSU"
-              className="w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-violet-400/50 focus:outline-none"
+              className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-content placeholder:text-content-subtle focus:border-brand/50 focus:outline-none"
             />
-            <p className="text-[11px] text-white/40">Your level</p>
-            <div className="flex gap-1 rounded-xl border border-white/10 bg-black/20 p-0.5">
+            <p className="text-[11px] text-content-faint">Your level</p>
+            <div className="flex gap-1 rounded-xl border border-line bg-surface p-0.5">
               {LEVELS.map((l) => (
                 <button
                   key={l.id}
@@ -223,8 +223,8 @@ export function StudyPanel({
                   onClick={() => setLevel(l.id)}
                   className={twMerge(
                     clsx(
-                      'flex-1 rounded-lg py-2 text-[10px] font-medium',
-                      level === l.id ? 'bg-violet-500/40 text-white' : 'text-white/45'
+                      'flex-1 rounded-lg py-2 text-[10px] font-medium transition-all',
+                      level === l.id ? 'bg-brand-gradient text-white shadow-cta font-semibold' : 'text-content-subtle hover:text-content'
                     )
                   )}
                 >
@@ -236,12 +236,12 @@ export function StudyPanel({
               type="button"
               disabled={loading || !topic.trim()}
               onClick={() => void buildPath()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient shadow-cta py-2.5 text-sm font-semibold text-white disabled:opacity-40"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               Build learning path
             </button>
-            {error && <p className="text-xs text-red-300">{error}</p>}
+            {error && <p className="text-xs text-danger">{error}</p>}
           </div>
         )}
 
@@ -249,8 +249,8 @@ export function StudyPanel({
           <>
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h3 className="text-base font-semibold text-white">{plan.topic}</h3>
-                <p className="mt-0.5 text-[11px] capitalize text-violet-200/80">{plan.level}</p>
+                <h3 className="text-base font-bold text-content">{plan.topic}</h3>
+                <p className="mt-0.5 text-[11px] capitalize font-medium text-brand">{plan.level}</p>
               </div>
               <button
                 type="button"
@@ -258,22 +258,22 @@ export function StudyPanel({
                   setPlan(null);
                   setTopic(plan.topic);
                 }}
-                className="text-[10px] text-white/40 hover:text-white/70"
+                className="text-[10px] text-content-subtle hover:text-content"
               >
                 New topic
               </button>
             </div>
 
             <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="inline-flex items-center gap-1 rounded-lg bg-white/8 px-2 py-1 text-white/70">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-surface-raised px-2 py-1 text-content-muted">
                 <Clock className="h-3 w-3" /> ~{plan.estimatedMinutes} min
               </span>
-              <span className="inline-flex items-center gap-1 rounded-lg bg-white/8 px-2 py-1 text-white/70">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-surface-raised px-2 py-1 text-content-muted">
                 <Target className="h-3 w-3" /> {plan.mastery.percent}% mastery
               </span>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-[11px] text-white/55 space-y-0.5">
+            <div className="rounded-xl border border-line bg-surface px-3 py-2.5 text-[11px] text-content-muted space-y-0.5">
               <p>
                 Quiz: {plan.mastery.quizCorrect}/{plan.mastery.quizTotal || '—'}
               </p>
@@ -288,10 +288,10 @@ export function StudyPanel({
 
             {plan.prerequisites.length > 0 && (
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Prerequisites</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Prerequisites</h4>
                 <ul className="mt-2 flex flex-wrap gap-1.5">
                   {plan.prerequisites.map((p) => (
-                    <li key={p} className="rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] text-emerald-100/90">
+                    <li key={p} className="rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
                       {p}
                     </li>
                   ))}
@@ -300,7 +300,7 @@ export function StudyPanel({
             )}
 
             <section>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Best segments</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Best segments</h4>
               <ul className="mt-2 space-y-2">
                 {plan.segments.map((seg, i) => (
                   <li key={seg.id}>
@@ -311,27 +311,27 @@ export function StudyPanel({
                         clsx(
                           'flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors',
                           seg.watched || plan.watchedSegmentIds.includes(seg.id)
-                            ? 'border-emerald-500/25 bg-emerald-500/8'
-                            : 'border-white/10 bg-white/[0.03] hover:bg-violet-500/10 hover:border-violet-400/30'
+                            ? 'border-emerald-500/30 bg-emerald-500/10'
+                            : 'border-line bg-surface hover:bg-surface-raised hover:border-line-strong'
                         )
                       )}
                     >
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-violet-500/25 text-[10px] font-bold text-violet-100">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand/20 text-[10px] font-bold text-brand">
                         {i + 1}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-medium text-white">{seg.title}</span>
-                        <span className="mt-0.5 block font-mono text-[10px] text-indigo-200/90">
+                        <span className="block text-xs font-semibold text-content">{seg.title}</span>
+                        <span className="mt-0.5 block font-mono text-[10px] text-brand">
                           {formatTime(seg.startTime)} – {formatTime(seg.endTime)}
                           {seg.videoTitle ? ` · ${seg.videoTitle}` : ''}
                         </span>
                         {seg.description && (
-                          <span className="mt-1 block text-[10px] leading-4 text-white/45 line-clamp-2">
+                          <span className="mt-1 block text-[10px] leading-4 text-content-muted line-clamp-2">
                             {seg.description}
                           </span>
                         )}
                       </span>
-                      <Play className="mt-1 h-3.5 w-3.5 shrink-0 text-white/35" />
+                      <Play className="mt-1 h-3.5 w-3.5 shrink-0 text-content-subtle" />
                     </button>
                   </li>
                 ))}
@@ -340,10 +340,10 @@ export function StudyPanel({
 
             {plan.keyConcepts.length > 0 && (
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Key concepts</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Key concepts</h4>
                 <ul className="mt-2 flex flex-wrap gap-1.5">
                   {plan.keyConcepts.map((c) => (
-                    <li key={c} className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-white/75">
+                    <li key={c} className="rounded-lg border border-line px-2 py-1 text-[11px] text-content-muted">
                       {c}
                     </li>
                   ))}
@@ -352,8 +352,8 @@ export function StudyPanel({
             )}
 
             {plan.conceptMap.length > 0 && (
-              <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Concept map</h4>
+              <section className="rounded-xl border border-line bg-surface-raised p-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Concept map</h4>
                 <div className="mt-2">
                   <ConceptTree nodes={plan.conceptMap} />
                 </div>
@@ -362,13 +362,13 @@ export function StudyPanel({
 
             {plan.interviewQuestions.length > 0 && (
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">
                   Common interview questions
                 </h4>
                 <ul className="mt-2 space-y-1">
                   {plan.interviewQuestions.map((q) => (
-                    <li key={q} className="flex items-start gap-1.5 text-xs text-white/75">
-                      <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-violet-400" />
+                    <li key={q} className="flex items-start gap-1.5 text-xs text-content-muted">
+                      <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-brand" />
                       {q}
                     </li>
                   ))}
@@ -378,19 +378,19 @@ export function StudyPanel({
 
             {plan.retrievalEvidence.length > 0 && (
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Retrieved from</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Retrieved from</h4>
                 <ul className="mt-2 space-y-1.5">
                   {plan.retrievalEvidence.slice(0, 8).map((e) => (
                     <li key={e.chunkId}>
                       <button
                         type="button"
                         onClick={() => onJumpToTime(e.startTime, e.videoId !== videoId ? e.videoId : undefined)}
-                        className="w-full rounded-lg border border-white/8 bg-black/15 px-2.5 py-2 text-left hover:border-indigo-400/30"
+                        className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-left hover:border-line-strong hover:bg-surface-raised"
                       >
-                        <span className="text-[10px] font-medium text-indigo-200/90">
+                        <span className="text-[10px] font-semibold text-brand">
                           {e.videoTitle ?? 'Lecture'} · {formatTime(e.startTime)} – {formatTime(e.endTime)}
                         </span>
-                        <span className="mt-0.5 block text-[10px] text-white/45 line-clamp-2">{e.excerpt}</span>
+                        <span className="mt-0.5 block text-[10px] text-content-muted line-clamp-2">{e.excerpt}</span>
                       </button>
                     </li>
                   ))}
@@ -399,25 +399,25 @@ export function StudyPanel({
             )}
 
             {plan.notesPreview && (
-              <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Notes preview</h4>
-                <div className="mt-2 text-xs text-white/70">
+              <section className="rounded-xl border border-line bg-surface-raised p-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Notes preview</h4>
+                <div className="mt-2 text-xs text-content-muted">
                   <MarkdownView content={plan.notesPreview} />
                 </div>
               </section>
             )}
 
             <section>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Generate notes</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Generate notes</h4>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 {NOTE_ACTIONS.map((a) => (
                   <button
                     key={a.type}
                     type="button"
                     onClick={() => handleNote(a.type)}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-2 text-[10px] text-white/75 hover:bg-violet-500/15"
+                    className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-2 text-[10px] font-medium text-content-muted hover:bg-brand/15 hover:text-brand transition-colors"
                   >
-                    <FileText className="h-3 w-3 shrink-0" />
+                    <FileText className="h-3 w-3 shrink-0 text-brand" />
                     {a.label}
                   </button>
                 ))}
@@ -426,14 +426,14 @@ export function StudyPanel({
 
             {plan.quickQuiz.length > 0 && (
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Quick quiz</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Quick quiz</h4>
                 <div className="mt-2 space-y-3">
                   {plan.quickQuiz.map((q) => {
                     const picked = quizAnswers[q.id];
                     const done = picked !== undefined;
                     return (
-                      <div key={q.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                        <p className="text-xs font-medium text-white/90">{q.question}</p>
+                      <div key={q.id} className="rounded-xl border border-line bg-surface-raised p-3">
+                        <p className="text-xs font-semibold text-content">{q.question}</p>
                         <div className="mt-2 space-y-1">
                           {q.options.map((opt, idx) => (
                             <button
@@ -443,15 +443,15 @@ export function StudyPanel({
                               onClick={() => setQuizAnswers((prev) => ({ ...prev, [q.id]: idx }))}
                               className={twMerge(
                                 clsx(
-                                  'block w-full rounded-lg border px-2 py-1.5 text-left text-[11px]',
-                                  !done && 'border-white/10 hover:bg-white/8',
+                                  'block w-full rounded-lg border px-2 py-1.5 text-left text-[11px] transition-colors',
+                                  !done && 'border-line text-content-muted hover:bg-surface-overlay hover:text-content',
                                   done &&
                                     idx === q.correctAnswer &&
-                                    'border-emerald-500/40 bg-emerald-500/15 text-emerald-100',
+                                    'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-semibold',
                                   done &&
                                     picked === idx &&
                                     idx !== q.correctAnswer &&
-                                    'border-red-500/40 bg-red-500/15',
+                                    'border-danger/40 bg-danger/15 text-danger font-semibold',
                                   done && picked !== idx && idx !== q.correctAnswer && 'opacity-50'
                                 )
                               )}
@@ -461,7 +461,7 @@ export function StudyPanel({
                           ))}
                         </div>
                         {done && (
-                          <p className="mt-2 text-[10px] text-white/50">{q.explanation}</p>
+                          <p className="mt-2 text-[10px] text-content-subtle">{q.explanation}</p>
                         )}
                       </div>
                     );
@@ -472,10 +472,10 @@ export function StudyPanel({
 
             {plan.nextTopics.length > 0 && (
               <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-white/45">Learn next</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Learn next</h4>
                 <ul className="mt-2 space-y-1">
                   {plan.nextTopics.map((t) => (
-                    <li key={t} className="text-xs text-violet-200/90">
+                    <li key={t} className="text-xs font-medium text-brand">
                       → {t}
                     </li>
                   ))}
@@ -483,21 +483,21 @@ export function StudyPanel({
               </section>
             )}
 
-            <section className="rounded-2xl border border-violet-500/25 bg-violet-500/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-white">
-                <MessageCircle className="h-3.5 w-3.5 text-violet-300" />
+            <section className="rounded-2xl border border-brand/30 bg-brand/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-content">
+                <MessageCircle className="h-3.5 w-3.5 text-brand" />
                 Ask the tutor
               </div>
               {(tutorMessages.length > 0 || tutorLoading) && (
-                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-lg bg-black/25 p-2">
+                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-lg bg-surface p-2 border border-line">
                   {tutorMessages.map((m) => (
                     <div
                       key={m.id}
                       className={clsx(
                         'rounded-lg px-2 py-1.5 text-xs',
                         m.role === 'user'
-                          ? 'ml-4 bg-indigo-500/20 text-indigo-50'
-                          : 'mr-2 bg-white/5 text-white/85'
+                          ? 'ml-4 bg-brand/20 text-content font-medium'
+                          : 'mr-2 bg-surface-raised text-content-muted'
                       )}
                     >
                       {m.role === 'assistant' ? (
@@ -508,7 +508,7 @@ export function StudyPanel({
                     </div>
                   ))}
                   {tutorLoading && (
-                    <p className="text-[10px] text-white/40">Thinking…</p>
+                    <p className="text-[10px] text-content-subtle">Thinking…</p>
                   )}
                 </div>
               )}
@@ -523,13 +523,13 @@ export function StudyPanel({
                     }
                   }}
                   placeholder={`Ask about ${plan.topic}…`}
-                  className="min-w-0 flex-1 rounded-lg border border-white/12 bg-black/30 px-2.5 py-2 text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-violet-400/40"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-2 text-xs text-content placeholder:text-content-subtle focus:outline-none focus:border-brand/40"
                 />
                 <button
                   type="button"
                   disabled={tutorLoading || !tutorInput.trim()}
                   onClick={() => void askTutor()}
-                  className="rounded-lg bg-violet-600 px-2.5 text-white disabled:opacity-40"
+                  className="rounded-lg bg-brand-gradient text-white px-2.5 disabled:opacity-40 shadow-cta"
                 >
                   {tutorLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -544,7 +544,7 @@ export function StudyPanel({
         )}
 
         {!plan && (
-          <p className="text-[11px] leading-5 text-white/40">
+          <p className="text-[11px] leading-5 text-content-subtle">
             Paths are built from indexed transcript chunks. With a playlist, watch more lectures to expand
             retrieval across the series.
           </p>

@@ -20,17 +20,17 @@ export function PipelineProgress() {
 
   return (
     <div
-      className="mx-4 mb-2 rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-2.5"
+      className="mx-4 mb-2 rounded-lg border border-line bg-surface-overlay px-3 py-2.5"
       role="status"
       aria-live="polite"
     >
-      <p className="text-xs font-medium text-neutral-200 animate-pulse">{message}</p>
+      <p className="text-xs font-medium text-content animate-pulse">{message}</p>
       <div className="mt-2 flex gap-1">
         {STAGES.map((s, i) => (
           <div
             key={s}
             className={`h-1 flex-1 rounded-full transition-colors ${
-              activeIndex >= i ? 'bg-indigo-500' : 'bg-neutral-800'
+              activeIndex >= i ? 'bg-brand' : 'bg-surface-raised'
             }`}
           />
         ))}

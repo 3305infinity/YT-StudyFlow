@@ -8,7 +8,8 @@ function segText(seg: Record<string, unknown>): string {
 
 export function parseJson3(text: string): RawCue[] | null {
   try {
-    const json = JSON.parse(text) as { events?: Array<Record<string, unknown>> };
+    const clean = text.replace(/^\s*\)\]\}'\s*/, '');
+    const json = JSON.parse(clean) as { events?: Array<Record<string, unknown>> };
     if (!Array.isArray(json.events)) return null;
 
     const cues: RawCue[] = [];
@@ -75,7 +76,8 @@ export function looksLikeTranscriptPayload(text: string, contentType: string): b
   if (text.includes('transcriptSegmentRenderer')) return true;
 
   try {
-    const json = JSON.parse(text) as { events?: unknown[] };
+    const clean = text.replace(/^\s*\)\]\}'\s*/, '');
+    const json = JSON.parse(clean) as { events?: unknown[] };
     if (Array.isArray(json.events) && json.events.length > 0) return true;
   } catch {
     // not json

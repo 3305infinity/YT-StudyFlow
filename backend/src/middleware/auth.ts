@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyAuthToken } from '../lib/authUtils.js';
 import { GUEST_USER_ID } from '../config/auth.config.js';
+import { env } from '../config/env.js';
 
 export type AuthedRequest = Request & {
   userId: string;
@@ -28,8 +29,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         return;
       }
 
-      // 2. Dev mode token fallback (dev:<userId>)
-      if (token.startsWith('dev:')) {
+      // 2. Dev mode token fallback (dev:<userId>) - strictly disabled in production unless ALLOW_DEV_AUTH=true
+      const allowDevAuth = process.env.ALLOW_DEV_AUTH === 'true' || !env.isProd;
+      if (token.startsWith('dev:') && allowDevAuth) {
         const devUserId = token.slice(4).trim() || GUEST_USER_ID;
         const authed = req as AuthedRequest;
         authed.userId = devUserId;

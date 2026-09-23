@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root, [data-theme='dark'] {
+  :root, :host, :host(.dark), :host([data-theme='dark']), [data-theme='dark'] {
     color-scheme: dark;
     --color-base: #09090b;
     --color-surface: #101013;
@@ -22,7 +22,7 @@
     text-rendering: optimizeLegibility;
   }
 
-  .light, [data-theme='light'] {
+  .light, :host(.light), :host([data-theme='light']), [data-theme='light'] {
     color-scheme: light;
     --color-base: #f8fafc;
     --color-surface: #ffffff;

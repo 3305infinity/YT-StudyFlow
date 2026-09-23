@@ -24,15 +24,18 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   currentTime: 0,
 
   setVideo: (videoId) => {
-    set({ videoId });
+    const prev = get();
+    if (prev.videoId !== videoId) {
+      set({ videoId, title: null, channel: null, duration: 0, currentTime: 0 });
+    }
   },
 
   setMetadata: (meta) => {
     const prev = get();
     const next = {
-      title: meta.title ?? prev.title,
-      channel: meta.channel ?? prev.channel,
-      duration: meta.duration ?? prev.duration,
+      title: meta.title !== undefined ? meta.title : prev.title,
+      channel: meta.channel !== undefined ? meta.channel : prev.channel,
+      duration: meta.duration && meta.duration > 0 ? meta.duration : prev.duration,
     };
     if (
       next.title === prev.title &&

@@ -3,7 +3,7 @@ import { embeddingService } from './embedding.service.js';
 import { pineconeService } from './pinecone.service.js';
 import { retrievalService, type ScoredChunkResult, type SemanticChunkInput } from './retrieval.service.js';
 import { mmr, type MMRConfig } from './mmr.service.js';
-import { contextPackingService } from './contextPacking.service.js';
+import { contextPackingService, type PackedContext } from './contextPacking.service.js';
 import { queryRewriteService, type QueryRewriteResult } from './queryRewrite.service.js';
 import { metricsService } from './metrics.service.js';
 import { retrievalMetrics } from './retrievalMetrics.js';
@@ -212,7 +212,7 @@ export const ragService = {
       const chunkIds = finalResults.map((r) => r.chunk.id);
       const cachedPacking = cacheManager.getPacking(params.videoId, chunkIds);
 
-      let packedContexts: Array<{ text: string; tokenCount: number; metadata: Record<string, unknown> }>;
+      let packedContexts: PackedContext[];
       try {
         packedContexts = cachedPacking.hit && cachedPacking.value
           ? cachedPacking.value
@@ -224,9 +224,15 @@ export const ragService = {
       } catch (error) {
         ragDevLog('packing-failed', { error: String(error) });
         packedContexts = finalResults.map((r) => ({
+          id: r.chunk.id,
           text: r.chunk.text,
+          startTime: r.chunk.startTime,
+          endTime: r.chunk.endTime,
+          videoId: r.chunk.videoId,
+          videoTitle: r.chunk.videoTitle,
+          playlistId: r.chunk.playlistId,
+          chunkIds: [r.chunk.id],
           tokenCount: Math.ceil(r.chunk.text.length / 4),
-          metadata: { chunkId: r.chunk.id },
         }));
       }
       const packingLatencyMs = Date.now() - totalStart - pineconeLatencyMs - mmrLatencyMs;

@@ -48,7 +48,7 @@ import {
 
 import type { RawCue } from './transcript.parser.types';
 
-import { getCurrentVideoId } from '@lib/youtube';
+import { isDifferentVideoNavigated } from '@lib/youtube';
 
 
 
@@ -276,10 +276,53 @@ async function fetchFromTimedtext(
     success: true,
   });
 
-  const result = await fetchCaptionText(url, signal);
+  try {
+    const parsedUrl = new URL(url);
+    console.log('[TRANSCRIPT DEBUG] TIMEDTEXT_REQUEST_START', {
+      urlOrigin: parsedUrl.origin,
+      urlPath: parsedUrl.pathname,
+      videoId,
+      lang,
+    });
+  } catch {
+    console.log('[TRANSCRIPT DEBUG] TIMEDTEXT_REQUEST_START', { videoId, lang });
+  }
+
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort(new Error('Timedtext fetch timed out after 10s'));
+  }, 10000);
+
+  const onParentAbort = () => timeoutController.abort(signal?.reason);
+  if (signal) {
+    if (signal.aborted) {
+      timeoutController.abort(signal.reason);
+    } else {
+      signal.addEventListener('abort', onParentAbort);
+    }
+  }
+
+  let result;
+  try {
+    result = await fetchCaptionText(url, timeoutController.signal);
+  } catch (err: any) {
+    console.error('[TRANSCRIPT DEBUG] TIMEDTEXT_REQUEST_ERROR', {
+      name: err?.name,
+      message: err?.message,
+    });
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener('abort', onParentAbort);
+  }
+
   const elapsedMs = Math.round(performance.now() - startTime);
 
   if (!result.ok || !result.text) {
+    console.error('[TRANSCRIPT DEBUG] TIMEDTEXT_REQUEST_ERROR', {
+      name: 'EmptyOrFailed',
+      message: result.via ? `Failed via ${result.via}` : 'Timedtext API returned empty or failed',
+    });
     logDebug('RESPONSE_RECEIVED', {
       videoId,
       transport: `timedtext-api-${lang}`,
@@ -289,6 +332,18 @@ async function fetchFromTimedtext(
     });
     return null;
   }
+
+  console.log('[TRANSCRIPT DEBUG] TIMEDTEXT_RESPONSE', {
+    status: 200,
+    ok: result.ok,
+    contentType: result.contentType,
+    via: result.via,
+  });
+
+  console.log('[TRANSCRIPT DEBUG] TIMEDTEXT_BODY', {
+    length: result.text.length,
+    prefix: result.text.slice(0, 150),
+  });
 
   logDebug('RESPONSE_RECEIVED', {
     videoId,
@@ -300,7 +355,12 @@ async function fetchFromTimedtext(
     bodyLength: result.text.length,
   });
 
+  console.log('[TRANSCRIPT DEBUG] TIMEDTEXT_PARSE_START');
   const cues = parseCaptionPayload(result.text, result.contentType);
+  console.log('[TRANSCRIPT DEBUG] TIMEDTEXT_PARSE_RESULT', {
+    cueCount: cues?.length ?? 0,
+  });
+
   if (cues?.length) {
     logDebug('PARSE_RESULT', {
       videoId,
@@ -393,7 +453,7 @@ export async function fetchTranscriptChunks(videoId: string): Promise<ExtractRes
 async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
   const startTime = performance.now();
   const capturedVideoId = videoId;
-  const stale = () => getCurrentVideoId() !== capturedVideoId;
+  const stale = () => isDifferentVideoNavigated(capturedVideoId);
   const controller = new AbortController();
 
   logDebug('FETCH_ATTEMPT', {
@@ -403,9 +463,10 @@ async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
     success: true,
   });
 
-  // Trigger CC toggle in main world asynchronously
+  // Trigger CC toggle in main world and wait for YouTube to initialize caption tracks
   const { triggerPlayerCaptions } = await import('./transcript.pageFetch');
-  void triggerPlayerCaptions();
+  await triggerPlayerCaptions();
+  await new Promise((r) => setTimeout(r, 600));
 
   let player = getPlayerResponse();
   let tracks = getCaptionTracksFromPage();
@@ -421,10 +482,33 @@ async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
     }
   }
 
+  console.log('[TRANSCRIPT DEBUG] PLAYER/TRACKS', {
+    videoId: capturedVideoId,
+    hasPlayer: !!player,
+    trackCount: tracks.length,
+    trackLanguages: tracks.map((t) => t.languageCode),
+  });
+
   const track = chooseCaptionTrack(tracks);
 
   try {
-    // 1. Direct caption track URL (FASTEST ~50-150ms)
+    // 1. InnerTube API — most reliable; uses YouTube's own transcript endpoint
+    console.log('[TRANSCRIPT DEBUG] TRY_INNERTUBE', { videoId: capturedVideoId });
+    const innertubeCues = await fetchFromInnertube(capturedVideoId, player, controller.signal);
+    if (innertubeCues?.length) {
+      if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
+      logDebug('STORE_UPDATE', {
+        videoId: capturedVideoId,
+        transport: 'innertube-success',
+        elapsedMs: Math.round(performance.now() - startTime),
+        success: true,
+        cueCount: innertubeCues.length,
+      });
+      return successResult(capturedVideoId, innertubeCues, track);
+    }
+
+    // 2. Direct caption track URL
+    console.log('[TRANSCRIPT DEBUG] TRY_DIRECT_TRACK', { videoId: capturedVideoId, hasBaseUrl: !!track?.baseUrl });
     if (track?.baseUrl) {
       const cues = await fetchFromTrack(capturedVideoId, track.baseUrl, controller.signal);
       if (cues?.length) {
@@ -440,7 +524,8 @@ async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
       }
     }
 
-    // 2. Direct timedtext API for common languages (~150-250ms)
+    // 3. Direct timedtext API for common languages
+    console.log('[TRANSCRIPT DEBUG] TRY_TIMEDTEXT', { videoId: capturedVideoId });
     const langs = [
       track?.languageCode,
       'en',
@@ -464,7 +549,8 @@ async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
       }
     }
 
-    // 3. Alternate caption tracks
+    // 4. Alternate caption tracks
+    console.log('[TRANSCRIPT DEBUG] TRY_ALTERNATE_TRACK', { videoId: capturedVideoId, trackCount: tracks.length });
     for (const t of tracks) {
       if (t.baseUrl === track?.baseUrl) continue;
       const cues = await fetchFromTrack(capturedVideoId, t.baseUrl, controller.signal);
@@ -481,21 +567,8 @@ async function executeFetchPipeline(videoId: string): Promise<ExtractResult> {
       }
     }
 
-    // 4. InnerTube API fallback
-    const innertubeCues = await fetchFromInnertube(capturedVideoId, player, controller.signal);
-    if (innertubeCues?.length) {
-      if (stale()) return { status: 'error', reason: 'Video changed during fetch' };
-      logDebug('STORE_UPDATE', {
-        videoId: capturedVideoId,
-        transport: 'innertube-success',
-        elapsedMs: Math.round(performance.now() - startTime),
-        success: true,
-        cueCount: innertubeCues.length,
-      });
-      return successResult(capturedVideoId, innertubeCues, track);
-    }
-
     // 5. DOM Panel Extraction fallback
+    console.log('[TRANSCRIPT DEBUG] TRY_DOM', { videoId: capturedVideoId });
     const domCues = await extractFromDomWithPanelOpen();
     if (domCues.length) {
       if (stale()) return { status: 'error', reason: 'Video changed during fetch' };

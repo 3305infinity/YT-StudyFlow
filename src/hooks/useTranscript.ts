@@ -3,7 +3,7 @@ import { fetchTranscriptChunks } from '@/features/transcript/transcript.service'
 import { findActiveChunkIndex } from '@/features/transcript/transcript.parser';
 import { useTranscriptStore } from '@/features/transcript/transcript.store';
 import { STUDYFLOW_EVENTS } from '@lib/constants';
-import { getCurrentVideoId } from '@lib/youtube';
+import { isDifferentVideoNavigated } from '@lib/youtube';
 
 export function useTranscript(videoId: string) {
   const requestRef = useRef(0);
@@ -37,7 +37,7 @@ export function useTranscript(videoId: string) {
       const { DbIds, ensureDbReady, getDb } = await import('@lib/db');
       await ensureDbReady();
       const cached = await getDb().transcripts.get(DbIds.transcript(capturedVideoId));
-      if (cached && cached.chunks?.length && getCurrentVideoId() === capturedVideoId) {
+      if (cached && cached.chunks?.length && !isDifferentVideoNavigated(capturedVideoId)) {
         const rawChunks = cached.chunks.map((c) => ({
           id: c.id,
           text: c.text,
@@ -79,7 +79,7 @@ export function useTranscript(videoId: string) {
     console.log('[YT StudyFlow] Invoking fetchTranscriptChunks network pipeline for:', capturedVideoId);
     const result = await fetchTranscriptChunks(capturedVideoId);
     if (requestId !== requestRef.current) return;
-    if (getCurrentVideoId() !== capturedVideoId) return;
+    if (isDifferentVideoNavigated(capturedVideoId)) return;
 
     if (result.status === 'success') {
       setTranscript({
@@ -98,7 +98,7 @@ export function useTranscript(videoId: string) {
     } else if (result.status === 'not-available') {
       const again = useTranscriptStore.getState();
       if (again.status === 'success' && again.chunks.length) return;
-      if (getCurrentVideoId() !== capturedVideoId) return;
+      if (isDifferentVideoNavigated(capturedVideoId)) return;
       setTranscriptNoAvailability(result.reason);
       console.warn('[YT StudyFlow] State updated: TRANSCRIPT_NO_AVAILABILITY', {
         videoId: capturedVideoId,
@@ -108,7 +108,7 @@ export function useTranscript(videoId: string) {
     } else {
       const again = useTranscriptStore.getState();
       if (again.status === 'success' && again.chunks.length) return;
-      if (getCurrentVideoId() !== capturedVideoId) return;
+      if (isDifferentVideoNavigated(capturedVideoId)) return;
       setTranscriptError({ type: 'unknown', message: result.reason });
       console.error('[YT StudyFlow] State updated: TRANSCRIPT_ERROR', {
         videoId: capturedVideoId,
@@ -118,7 +118,7 @@ export function useTranscript(videoId: string) {
     }
 
     try {
-      if (getCurrentVideoId() !== capturedVideoId) return;
+      if (isDifferentVideoNavigated(capturedVideoId)) return;
       const { DbIds, ensureDbReady, getDb, nowMs } = await import('@lib/db');
       await ensureDbReady();
       const ts = nowMs();
@@ -168,7 +168,7 @@ export function useTranscript(videoId: string) {
           const s = useTranscriptStore.getState();
           if (s.status === 'success' && s.chunks.length) return;
           if (s.status === 'loading') return;
-          if (getCurrentVideoId() !== videoId) return;
+          if (isDifferentVideoNavigated(videoId)) return;
           console.log(`[TRANSCRIPT DEBUG] RETRY_BACKOFF_TRIGGERED | videoId:${videoId} | delay:${delay}ms`);
           void loadTranscript();
         }, delay)

@@ -3,6 +3,7 @@ import { groqService } from './groq.service.js';
 import type { ResponseLanguageId } from '../lib/languages.js';
 import { AppError } from '../utils/appError.js';
 import { ragDevLog } from './rag/devLog.js';
+import { env } from '../config/env.js';
 
 type TranscriptSegment = {
   id: string;
@@ -61,12 +62,17 @@ async function translateBatch(
   sourceLanguage?: string
 ): Promise<TranscriptSegment[]> {
   const system = [
-    'You are the language transformation engine for YT StudyFlow.',
-    'Translate every lecture transcript segment while preserving ordering, segment IDs, indexes, startTime, endTime, and duration exactly.',
-    localization.transcriptTranslationPrompt(targetLanguage),
-    'Translate the text field only. Do not summarize, shorten, merge, omit, or add segments.',
-    'Do not translate technical terms unnecessarily (keep RAG, embeddings, vector database, Pinecone, API, React, etc. in English).',
-    'Return JSON only: {"chunks":[{"id":string,"text":string,"startTime":number,"endTime":number,"duration":number,"index":number}]}',
+    'You are a high-precision subtitle and study material translation engine for YT StudyFlow.',
+    'Translate the provided array of video caption segments into the requested language.',
+    'Preserve exact segment index, startTime, and endTime values.',
+    'Rules:',
+    '1. Return ONLY a JSON array of objects with keys: index, text, startTime, endTime.',
+    '2. Do not merge or split segments.',
+    '3. Do not add markdown formatting or commentary outside the JSON.',
+    '4. Handle target language modes accurately:',
+    '   - English: Natural, accurate English.',
+    '   - Hindi: Natural Hindi in Devanagari script.',
+    '   - Hinglish: Natural conversational Hindi written in Roman script, keeping technical terms in English (e.g., "Transformer model ka compute complexity O(N^2) hota hai").',
   ].join('\n');
 
   const user = [
@@ -77,7 +83,7 @@ async function translateBatch(
     .filter(Boolean)
     .join('\n');
 
-  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+  const model = env.groqModel;
   const startTime = Date.now();
 
   ragDevLog('language:groq', {
@@ -161,7 +167,7 @@ Do not translate technical terms unnecessarily (keep RAG, embeddings, vector dat
 Return only the transformed content.`;
 
     const user = `Target Language Mode: ${targetLanguage}\n\nContent to transform:\n${content}`;
-    const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+    const model = env.groqModel;
     const startTime = Date.now();
 
     ragDevLog('language:groq', {

@@ -7,6 +7,7 @@ import {
 } from '@lib/api/auth';
 import { api, ApiClientError, checkBackendHealth } from '@lib/api/client';
 import { runSync } from '@lib/sync/engine';
+import { AUTH_DISABLED, GUEST_USER_ID } from '@lib/config/auth.config';
 import { CLOUD_SYNC_DISABLED } from '@lib/config/sync.config';
 
 interface AuthState {
@@ -23,32 +24,45 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  loaded: false,
-  backendOnline: false,
+  user: AUTH_DISABLED ? { userId: GUEST_USER_ID, name: 'Local Guest', email: 'guest@studyflow.local' } : null,
+  loaded: AUTH_DISABLED ? true : false,
+  backendOnline: true,
   authenticating: false,
   authError: null,
 
   load: async () => {
-    const online = await checkBackendHealth();
-    const token = await getAuthToken();
-
-    if (!token) {
-      set({ user: null, backendOnline: online, loaded: true, authenticating: false, authError: null });
+    if (AUTH_DISABLED) {
+      set({
+        user: { userId: GUEST_USER_ID, name: 'Local Guest', email: 'guest@studyflow.local' },
+        backendOnline: true,
+        loaded: true,
+        authenticating: false,
+        authError: null,
+      });
       return;
     }
 
     try {
+      const healthPromise = checkBackendHealth();
+      const timeoutPromise = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000));
+      const online = await Promise.race([healthPromise, timeoutPromise]);
+      const token = await getAuthToken();
+
+      if (!token) {
+        set({ user: null, backendOnline: online, loaded: true, authenticating: false, authError: null });
+        return;
+      }
+
       const resp = await api.get<{ user: AuthUser }>('/api/auth/me');
       set({ user: resp.user, backendOnline: online, loaded: true, authenticating: false, authError: null });
       if (!CLOUD_SYNC_DISABLED) void runSync();
     } catch (e) {
       if (e instanceof ApiClientError && e.status === 401) {
         await clearAuthSession();
-        set({ user: null, backendOnline: online, loaded: true, authenticating: false, authError: null });
-      } else {
-        set({ backendOnline: online, loaded: true, authenticating: false });
       }
+      set({ user: null, backendOnline: false, loaded: true, authenticating: false });
+    } finally {
+      set({ loaded: true });
     }
   },
 

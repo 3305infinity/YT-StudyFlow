@@ -54,7 +54,7 @@ export async function setCachedNoteLanguage(
 export async function invalidateNoteLanguageCache(noteId: string): Promise<void> {
   try {
     await ensureDbReady();
-    const languages: ResponseLanguageId[] = ['hi', 'hinglish'];
+    const languages: ResponseLanguageId[] = ['es', 'fr', 'de'];
     for (const lang of languages) {
       const key = cacheKey(noteId, lang);
       await getDb().transcriptTranslations.delete(key);
