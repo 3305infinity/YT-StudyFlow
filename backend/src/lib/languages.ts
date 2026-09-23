@@ -23,12 +23,6 @@ export const INITIAL_RESPONSE_LANGUAGES: ResponseLanguage[] = [
 
 export const RESPONSE_LANGUAGES: ResponseLanguage[] = [
   ...INITIAL_RESPONSE_LANGUAGES,
-  { id: 'es', label: 'Spanish', nativeLabel: 'Español' },
-  { id: 'fr', label: 'French', nativeLabel: 'Français' },
-  { id: 'de', label: 'German', nativeLabel: 'Deutsch' },
-  { id: 'ja', label: 'Japanese', nativeLabel: '日本語' },
-  { id: 'zh', label: 'Chinese', nativeLabel: '中文' },
-  { id: 'ko', label: 'Korean', nativeLabel: '한국어' },
 ];
 
 export const DEFAULT_RESPONSE_LANGUAGE: ResponseLanguageId = 'en';

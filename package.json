@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && cd backend && npm install && npm run build",
+    "start": "cd backend && npm start",
     "build:store": "tsc && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",

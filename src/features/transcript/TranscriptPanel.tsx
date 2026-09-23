@@ -14,7 +14,6 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import type { EnhancedTranscriptChunk } from '@/types/transcript';
-import type { ResponseLanguageId } from '@lib/languages';
 import { useTranscriptStore } from './transcript.store';
 import { formatTime } from '@lib/youtube';
 
@@ -291,37 +290,32 @@ export function TranscriptPanel({
                 Original {language ? `(${language.toUpperCase()})` : ''}
               </button>
 
-              {((language || '').toLowerCase().startsWith('en') ? ['es', 'fr'] : ['en']).map((targetLang) => {
-                const targetLabel = targetLang === 'en' ? 'English' : targetLang === 'es' ? 'Spanish' : 'French';
-                const isSelected = viewMode === 'translated' && translationLanguage === targetLang;
-                const isLoadingThis = translationLoading && translationLanguage === targetLang;
-
-                return (
-                  <button
-                    key={targetLang}
-                    type="button"
-                    disabled={translationLoading}
-                    onClick={() => {
-                      if (isSelected) {
-                        setTranslationView('translated');
-                        return;
-                      }
-                      void loadTranslation(targetLang as ResponseLanguageId);
-                    }}
-                    className={twMerge(
-                      clsx(
-                        'flex-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors',
-                        isSelected
-                          ? 'bg-brand-gradient text-white font-semibold shadow-cta'
-                          : 'text-content-subtle hover:text-content',
-                        isLoadingThis && 'animate-pulse'
-                      )
-                    )}
-                  >
-                    {isLoadingThis ? 'Translating…' : targetLabel}
-                  </button>
-                );
-              })}
+              {!(language || '').toLowerCase().startsWith('en') && (
+                <button
+                  type="button"
+                  disabled={translationLoading}
+                  onClick={() => {
+                    if (viewMode === 'translated' && translationLanguage === 'en') {
+                      setTranslationView('translated');
+                      return;
+                    }
+                    void loadTranslation('en');
+                  }}
+                  className={twMerge(
+                    clsx(
+                      'flex-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors',
+                      viewMode === 'translated' && translationLanguage === 'en'
+                        ? 'bg-brand-gradient text-white font-semibold shadow-cta'
+                        : 'text-content-subtle hover:text-content',
+                      translationLoading && translationLanguage === 'en' && 'animate-pulse'
+                    )
+                  )}
+                >
+                  {translationLoading && translationLanguage === 'en'
+                    ? 'Translating…'
+                    : 'Translate to English'}
+                </button>
+              )}
             </div>
           )}
           {translationError && (

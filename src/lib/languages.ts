@@ -18,20 +18,13 @@ export type ResponseLanguage = {
 /** Initial launch languages — add entries here to expand UI without refactoring. */
 export const INITIAL_RESPONSE_LANGUAGES: ResponseLanguage[] = [
   { id: 'en', label: 'English', nativeLabel: 'English' },
-  { id: 'es', label: 'Spanish', nativeLabel: 'Español' },
-  { id: 'fr', label: 'French', nativeLabel: 'Français' },
-  { id: 'de', label: 'German', nativeLabel: 'Deutsch' },
+  { id: 'hi', label: 'Hindi', nativeLabel: 'हिंदी' },
+  { id: 'hinglish', label: 'Hinglish', nativeLabel: 'Hinglish' },
 ];
 
 /** Full catalog for normalization of persisted settings. */
 export const RESPONSE_LANGUAGES: ResponseLanguage[] = [
   ...INITIAL_RESPONSE_LANGUAGES,
-  { id: 'es', label: 'Spanish', nativeLabel: 'Español' },
-  { id: 'fr', label: 'French', nativeLabel: 'Français' },
-  { id: 'de', label: 'German', nativeLabel: 'Deutsch' },
-  { id: 'ja', label: 'Japanese', nativeLabel: '日本語' },
-  { id: 'zh', label: 'Chinese', nativeLabel: '中文' },
-  { id: 'ko', label: 'Korean', nativeLabel: '한국어' },
 ];
 
 export const DEFAULT_RESPONSE_LANGUAGE: ResponseLanguageId = 'en';
