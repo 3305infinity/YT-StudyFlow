@@ -1,5 +1,7 @@
 import { getAuthToken } from './auth';
+import { getInstallId } from './installId';
 import { AUTH_DISABLED } from '@lib/config/auth.config';
+import { apiBaseUrl } from '@lib/config/api.config';
 import { friendlyAiError, logDevAiError } from '@lib/aiErrors';
 
 export type ApiErrorBody = {
@@ -23,17 +25,6 @@ export class ApiClientError extends Error {
   }
 }
 
-function apiBaseUrl(): string {
-  const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
-  if (envUrl && envUrl !== 'http://localhost:3001' && envUrl !== 'http://127.0.0.1:3001') {
-    return envUrl;
-  }
-  if (import.meta.env.PROD) {
-    return 'https://yt-studyflow.onrender.com';
-  }
-  return envUrl || 'https://yt-studyflow.onrender.com';
-}
-
 type ProxyResponse = {
   ok: boolean;
   status: number;
@@ -51,9 +42,15 @@ async function fetchViaBackground(url: string, init: RequestInit): Promise<Proxy
     Object.assign(headers, init.headers);
   }
 
+  // Anonymous per-install id so the backend can scope rate limits and data per user.
+  const installId = await getInstallId();
+  if (installId) {
+    headers['X-Install-Id'] = installId;
+  }
+
   const doDirectFetch = async (): Promise<ProxyResponse> => {
     try {
-      const res = await fetch(url, init);
+      const res = await fetch(url, { ...init, headers });
       const text = await res.text();
       return { ok: res.ok, status: res.status, text };
     } catch (e) {

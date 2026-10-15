@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthedRequest } from '../middleware/auth.js';
 import { geminiService } from '../services/gemini.service.js';
+import { groqService, groqModel } from '../services/groq.service.js';
 import { transcriptTranslationService } from '../services/transcriptTranslation.service.js';
 import { normalizeLanguageId, type ResponseLanguageId } from '../lib/languages.js';
 import { recordUsage } from '../middleware/rateLimit.js';
@@ -8,8 +9,13 @@ import { env } from '../config/env.js';
 import { GEMINI_DEFAULTS, GEMINI_API_BASE } from '../services/gemini/gemini.config.js';
 
 export const aiController = {
+  /**
+   * General text generation: notes, summaries, chapters, flashcards, quizzes and the
+   * study agent all reach Groq through here. The `model` field in the request body is
+   * ignored — older clients still send a Gemini id, and Gemini is embeddings-only now.
+   */
   async generate(req: AuthedRequest, res: Response): Promise<void> {
-    const result = await geminiService.generateText(req.body);
+    const result = await groqService.generateText(req.body);
     await recordUsage(req, 'ai.generate');
     res.json(result);
   },
@@ -39,9 +45,11 @@ export const aiController = {
     res.json({
       ok: true,
       service: 'ai',
-      configured: !!env.geminiApiKey,
-      endpoint: GEMINI_API_BASE,
-      defaultTextModel: GEMINI_DEFAULTS.textModel,
+      configured: !!env.geminiApiKey && !!env.groqApiKey,
+      textProvider: 'groq',
+      defaultTextModel: groqModel(),
+      embeddingProvider: 'gemini',
+      embeddingEndpoint: GEMINI_API_BASE,
       defaultEmbeddingModel: GEMINI_DEFAULTS.embeddingModel,
     });
   },

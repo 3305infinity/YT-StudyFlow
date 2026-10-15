@@ -4,7 +4,7 @@ import { env } from '../../config/env.js';
 export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export const GEMINI_DEFAULTS = {
-  textModel: 'gemini-3.5-flash',
+  // Embeddings only — text generation runs on Groq (services/groq.service.ts).
   embeddingModel: 'gemini-embedding-001',
   requestTimeoutMs: 30_000,
   maxRetries: 2,

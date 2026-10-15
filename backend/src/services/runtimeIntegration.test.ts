@@ -9,6 +9,9 @@ import { Pinecone } from '@pinecone-database/pinecone';
 const TEST_USER = 'integration_audit_user';
 const TEST_VIDEO = 'audit_video_e2e_8899';
 
+/** Native output width of gemini-embedding-001, and the required Pinecone index size. */
+const EMBEDDING_DIMENSIONS = 3072;
+
 const SAMPLE_CHUNKS = [
   {
     id: 'chunk_python_mem',
@@ -53,7 +56,11 @@ describe('Runtime Integration Audit: Gemini & Pinecone', () => {
     assert.equal(docResults.length, 1);
     const docVec = docResults[0]!.embedding;
     assert.ok(Array.isArray(docVec));
-    assert.equal(docVec.length, 768, `Expected 768 dimensions, got ${docVec.length}`);
+    assert.equal(
+      docVec.length,
+      EMBEDDING_DIMENSIONS,
+      `Expected ${EMBEDDING_DIMENSIONS} dimensions, got ${docVec.length}`
+    );
     assert.ok(docVec.every((n) => typeof n === 'number' && Number.isFinite(n)), 'Vector contains invalid non-numeric values');
 
     const queryStart = Date.now();
@@ -61,7 +68,11 @@ describe('Runtime Integration Audit: Gemini & Pinecone', () => {
     const queryLatency = Date.now() - queryStart;
 
     assert.ok(Array.isArray(queryVec));
-    assert.equal(queryVec.length, 768, `Expected 768 dimensions for query, got ${queryVec.length}`);
+    assert.equal(
+      queryVec.length,
+      EMBEDDING_DIMENSIONS,
+      `Expected ${EMBEDDING_DIMENSIONS} dimensions for query, got ${queryVec.length}`
+    );
     assert.ok(queryVec.every((n) => typeof n === 'number' && Number.isFinite(n)));
 
     const sim = cosineSimilarity(queryVec, docVec);
@@ -89,7 +100,11 @@ describe('Runtime Integration Audit: Gemini & Pinecone', () => {
     console.log(`Index Dimension: ${stats.dimension}`);
     console.log(`Total Vector Count: ${stats.totalRecordCount}`);
 
-    assert.equal(stats.dimension, 768, `Pinecone index dimension (${stats.dimension}) does not match Gemini 768 dimensions!`);
+    assert.equal(
+      stats.dimension,
+      EMBEDDING_DIMENSIONS,
+      `Pinecone index dimension (${stats.dimension}) does not match gemini-embedding-001 (${EMBEDDING_DIMENSIONS} dimensions)!`
+    );
 
     const ns = pineconeNamespace(TEST_USER, TEST_VIDEO);
     console.log(`Isolated Test Namespace: ${ns}`);

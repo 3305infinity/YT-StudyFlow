@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import type { AuthedRequest } from '../middleware/auth.js';
-import { geminiService } from '../services/gemini.service.js';
+import { groqService } from '../services/groq.service.js';
 import { ragService } from '../services/rag.service.js';
 import { promptBuilderService } from '../services/promptBuilder.service.js';
 import { citationService } from '../services/citation.service.js';
@@ -96,8 +96,7 @@ export const chatController = {
       });
     }
 
-    const result = await geminiService.generateText({
-      model: 'gemini-3.5-flash',
+    const result = await groqService.generateText({
       prompt: {
         system:
           system ?? promptBuilderService.chatSystem(mode, normalizeLanguageId(language)),

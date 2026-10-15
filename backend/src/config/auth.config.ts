@@ -4,5 +4,19 @@
  */
 export const AUTH_DISABLED = process.env.AUTH_DISABLED !== 'false';
 
-/** Stable user id used while auth is disabled (Pinecone namespaces, sync, quotas). */
-export const GUEST_USER_ID = process.env.GUEST_USER_ID?.trim() || 'guest-local-user';
+/**
+ * Display-only guest id. Must stay in sync with GUEST_USER_ID in
+ * src/lib/config/auth.config.ts (extension). Not configurable via env so the two
+ * sides cannot drift apart.
+ *
+ * NOTE: this is NOT used to scope data or quotas. Anonymous callers are identified
+ * per installation (`anon:<uuid>` from the X-Install-Id header) or by IP — see
+ * middleware/auth.ts.
+ */
+export const GUEST_USER_ID = 'guest-local-user';
+
+/** Prefix for per-installation anonymous user ids. */
+export const ANON_USER_PREFIX = 'anon:';
+
+/** Prefix for IP-derived anonymous user ids (used when no install id is sent). */
+export const ANON_IP_PREFIX = 'ip:';

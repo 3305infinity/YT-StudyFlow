@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react';
 
 export function WorkspaceShell({
-  title,
-  subtitle,
-  actions,
-  children,
+  title,  subtitle,  actions,  children,
 }: {
   title: string;
   subtitle?: string;

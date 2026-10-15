@@ -1,29 +1,18 @@
+/**
+ * Gemini is used for embeddings ONLY.
+ *
+ * All text generation — chat answers, notes, chapters, flashcards, quizzes, the study
+ * agent and translation — runs on Groq via services/groq.service.ts. Do not add a
+ * generateContent path back into this file.
+ */
+
 import { GEMINI_DEFAULTS, logDev } from './gemini.config.js';
-import { emptyResponseError } from './gemini.errors.js';
 import { assertOkResponse, geminiPost } from './gemini.http.js';
 import {
   extractBatchEmbeddings,
-  extractGenerationMetadata,
   extractSingleEmbedding,
-  extractText,
   parseJsonBody,
 } from './gemini.parse.js';
-
-export type GenerateTextInput = {
-  model: string;
-  prompt: { system?: string; user: string };
-  config?: { temperature?: number; maxOutputTokens?: number };
-};
-
-export type GenerateTextOutput = {
-  content: string;
-  tokensUsed?: number;
-  model: string;
-  finishReason?: string;
-  promptTokenCount?: number;
-  candidatesTokenCount?: number;
-  rawResponseLength: number;
-};
 
 export type EmbedInput = {
   model: string;
@@ -37,65 +26,6 @@ export type EmbedOutput = {
 };
 
 export const geminiService = {
-   async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
-    const model = input.model || GEMINI_DEFAULTS.textModel;
-    const maxOutputTokens = input.config?.maxOutputTokens ?? 1200;
-    logDev('generateText:init', {
-      model,
-      hasSystemInstruction: !!input.prompt.system,
-      userChars: input.prompt.user.length,
-      temperature: input.config?.temperature ?? 0.3,
-      maxOutputTokens,
-    });
-    const result = await geminiPost(`/models/${encodeURIComponent(model)}:generateContent`, {
-      system_instruction: input.prompt.system
-        ? { parts: [{ text: input.prompt.system }] }
-        : undefined,
-      contents: [{ role: 'user', parts: [{ text: input.prompt.user }] }],
-      generation_config: {
-        temperature: input.config?.temperature ?? 0.3,
-        maxOutputTokens,
-      },
-    });
-
-    const text = assertOkResponse(result);
-    const data = parseJsonBody<Record<string, unknown>>(text);
-    const metadata = extractGenerationMetadata(data);
-    const content = extractText(data);
-    if (!content) throw emptyResponseError();
-
-    logDev('generateText:parsed', {
-      model,
-      contentChars: content.length,
-      tokensUsed: metadata.totalTokenCount,
-      finishReason: metadata.finishReason,
-      candidateCount: metadata.candidateCount,
-      promptTokenCount: metadata.promptTokenCount,
-      candidatesTokenCount: metadata.candidatesTokenCount,
-      totalTokenCount: metadata.totalTokenCount,
-      rawResponseLength: text.length,
-    });
-
-    if (metadata.finishReason !== 'STOP') {
-      logDev('generateText:finish-reason-warning', {
-        model,
-        finishReason: metadata.finishReason,
-        contentChars: content.length,
-        maxOutputTokens,
-      });
-    }
-
-    return {
-      content,
-      tokensUsed: metadata.totalTokenCount,
-      model,
-      finishReason: metadata.finishReason,
-      promptTokenCount: metadata.promptTokenCount,
-      candidatesTokenCount: metadata.candidatesTokenCount,
-      rawResponseLength: text.length,
-    };
-  },
-
   async embedTexts(input: EmbedInput): Promise<EmbedOutput> {
     const model = input.model || GEMINI_DEFAULTS.embeddingModel;
     const taskType = input.taskType ?? 'RETRIEVAL_DOCUMENT';
@@ -145,13 +75,15 @@ export const geminiService = {
     return { model, embeddings };
   },
 
+  /** Health of the embedding path — the only thing Gemini is used for. */
   async checkHealth(): Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> {
     const start = Date.now();
     try {
-      const model = GEMINI_DEFAULTS.textModel;
-      const result = await geminiPost(`/models/${encodeURIComponent(model)}:generateContent`, {
-        contents: [{ role: 'user', parts: [{ text: 'test' }] }],
-        generation_config: { maxOutputTokens: 1 },
+      const model = GEMINI_DEFAULTS.embeddingModel;
+      const result = await geminiPost(`/models/${encodeURIComponent(model)}:embedContent`, {
+        model: `models/${model}`,
+        content: { parts: [{ text: 'health check' }] },
+        taskType: 'RETRIEVAL_QUERY',
       });
       assertOkResponse(result);
       return { status: 'healthy', latencyMs: Date.now() - start };

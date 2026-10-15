@@ -4,32 +4,38 @@ import { crx } from '@crxjs/vite-plugin';
 import manifest from './public/manifest.json';
 import path from 'path';
 
-export default defineConfig({
-  plugins: [react(), crx({ manifest: manifest as chrome.runtime.ManifestV3 })],
+export default defineConfig(({ mode }) => {
+  const isProd = mode === 'production';
 
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@features': path.resolve(__dirname, './src/features'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@lib': path.resolve(__dirname, './src/lib'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@store': path.resolve(__dirname, './src/store'),
-      '@types': path.resolve(__dirname, './src/types'),
-    },
-  },
+  return {
+    plugins: [react(), crx({ manifest: manifest as chrome.runtime.ManifestV3 })],
 
-  build: {
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: false,
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+        '@features': path.resolve(__dirname, './src/features'),
+        '@components': path.resolve(__dirname, './src/components'),
+        '@lib': path.resolve(__dirname, './src/lib'),
+        '@hooks': path.resolve(__dirname, './src/hooks'),
+        '@store': path.resolve(__dirname, './src/store'),
+        '@types': path.resolve(__dirname, './src/types'),
       },
     },
-  },
 
-  server: {
-    port: 5173,
-    strictPort: true,
-  },
+    build: {
+      minify: 'terser' as const,
+      terserOptions: {
+        compress: {
+          // Strip console/debugger from store builds only; keep them for dev builds.
+          drop_console: isProd,
+          drop_debugger: isProd,
+        },
+      },
+    },
+
+    server: {
+      port: 5173,
+      strictPort: true,
+    },
+  };
 });

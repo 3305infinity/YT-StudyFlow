@@ -15,14 +15,22 @@ export const env = {
   port: Number(process.env.PORT ?? 3001),
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProd: process.env.NODE_ENV === 'production',
-  corsOrigins: (process.env.CORS_ORIGINS ?? '*')
+  // No '*' default — see config/cors.ts for the baseline allowlist.
+  corsOrigins: (process.env.CORS_ORIGINS ?? '')
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean),
+    .filter(Boolean)
+    .filter((s) => s !== '*'),
+  /** Chrome Web Store id of the published extension (32 lowercase letters a-p). */
+  extensionId: (process.env.EXTENSION_ID?.trim().toLowerCase() ?? '').match(/^[a-p]{32}$/)
+    ? process.env.EXTENSION_ID!.trim().toLowerCase()
+    : '',
   clerkSecretKey: process.env.CLERK_SECRET_KEY?.trim() ?? '',
   clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY?.trim() ?? '',
+  /** Embeddings only. All text generation runs on Groq. */
   geminiApiKey: required('GEMINI_API_KEY', process.env.GEMINI_API_KEY),
-  groqApiKey: process.env.GROQ_API_KEY?.trim() ?? '',
+  /** Required in production: every text-generation path depends on it. */
+  groqApiKey: required('GROQ_API_KEY', process.env.GROQ_API_KEY),
   groqModel: process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b',
   pineconeApiKey: process.env.PINECONE_API_KEY?.trim() ?? '',
   pineconeIndex: process.env.PINECONE_INDEX?.trim() ?? 'yt-studyflow',
@@ -31,16 +39,18 @@ export const env = {
   directUrl: process.env.DIRECT_URL?.trim() ?? '',
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000),
   rateLimitMaxPerWindow: Number(process.env.RATE_LIMIT_MAX_PER_WINDOW ?? 30),
+  /** Higher ceiling applied per IP, on top of the per-install limit. */
+  ipRateLimitMaxPerWindow: Number(process.env.IP_RATE_LIMIT_MAX_PER_WINDOW ?? 120),
   dailyQuotaMax: Number(process.env.DAILY_QUOTA_MAX ?? 200),
 } as const;
 
 export function assertRuntimeConfig(): void {
   if (env.isProd && !env.geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is required in production');
+    throw new Error('GEMINI_API_KEY is required in production for embeddings');
   }
 
   if (env.isProd && !env.groqApiKey) {
-    throw new Error('GROQ_API_KEY is required in production for final answer generation');
+    throw new Error('GROQ_API_KEY is required in production for all text generation');
   }
 
   if (env.isProd && !env.pineconeApiKey) {

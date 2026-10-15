@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { env, assertRuntimeConfig } from './config/env.js';
 import { GEMINI_API_BASE, GEMINI_DEFAULTS } from './services/gemini/gemini.config.js';
+import { groqModel } from './services/groq.service.js';
 
 assertRuntimeConfig();
 
@@ -9,11 +10,14 @@ const app = createApp();
 const server = app.listen(env.port, '0.0.0.0', () => {
   console.log(`[yt-studyflow-backend] listening on 0.0.0.0:${env.port}`);
   if (env.nodeEnv === 'development') {
-    console.log('[yt-studyflow-backend] Gemini config', {
-      endpoint: GEMINI_API_BASE,
-      textModel: GEMINI_DEFAULTS.textModel,
+    console.log('[yt-studyflow-backend] AI providers', {
+      textProvider: 'groq',
+      textModel: groqModel(),
+      groqKeyLoaded: !!env.groqApiKey,
+      embeddingProvider: 'gemini',
+      embeddingEndpoint: GEMINI_API_BASE,
       embeddingModel: GEMINI_DEFAULTS.embeddingModel,
-      apiKeyLoaded: !!env.geminiApiKey,
+      geminiKeyLoaded: !!env.geminiApiKey,
     });
   }
 });

@@ -1,85 +1,54 @@
 /// <reference lib="webworker" />
 
 /**
- * Background service worker — page fetch, CC toggle, and periodic sync.
+ * Background service worker — proxies backend API calls and runs the page-context
+ * transcript fetch / caption toggle in the YouTube tab.
+ *
  * AI requests go through the Express backend (never direct Gemini from the extension).
+ * Every proxied URL is checked against an allowlist so the worker can never be used
+ * as an open fetch relay.
  */
 
-import { CLOUD_SYNC_DISABLED } from '../lib/config/sync.config';
+import { apiOrigin } from '../lib/config/api.config';
 
-const SYNC_ALARM = 'studyflow-sync';
-const SYNC_INTERVAL_MINUTES = 30;
+/** youtube.com, www.youtube.com, and *.youtube.com / *.googlevideo.com caption hosts. */
+const PAGE_FETCH_HOST_RE = /^([a-z0-9-]+\.)*(youtube\.com|googlevideo\.com)$/;
 
-async function triggerBackgroundSync(): Promise<void> {
+function isSameExtension(sender: chrome.runtime.MessageSender): boolean {
+  return sender.id === chrome.runtime.id;
+}
+
+function isBackendUrl(raw: string): boolean {
+  const origin = apiOrigin();
+  if (!origin) return false;
   try {
-    const { runSync } = await import('../lib/sync/engine');
-    await runSync();
-  } catch (err) {
-    console.warn('[YT StudyFlow] background sync failed', err);
+    return new URL(raw).origin === origin;
+  } catch {
+    return false;
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('[YT StudyFlow] Extension installed');
-  // TODO: Re-enable periodic cloud sync when CLOUD_SYNC_DISABLED=false.
-  if (!CLOUD_SYNC_DISABLED) {
-    chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_INTERVAL_MINUTES });
-  }
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === SYNC_ALARM && !CLOUD_SYNC_DISABLED) {
-    void triggerBackgroundSync();
-  }
-});
-
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === 'YT_STUDYFLOW_AUTH_COMPLETE') {
-    console.log('[YT StudyFlow] Auth session saved');
-    // TODO: Re-enable when CLOUD_SYNC_DISABLED=false.
-    if (!CLOUD_SYNC_DISABLED) void triggerBackgroundSync();
+function isPageFetchUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return false;
+    return PAGE_FETCH_HOST_RE.test(url.hostname.toLowerCase());
+  } catch {
     return false;
   }
-  if (message?.type === 'YT_STUDYFLOW_RUN_SYNC') {
-    if (!CLOUD_SYNC_DISABLED) void triggerBackgroundSync();
-    return false;
-  }
-  if (message?.type === 'YT_STUDYFLOW_OPEN_SIGN_IN') {
-    const extId = chrome.runtime.id?.trim() ?? '';
-    if (!/^[a-p]{32}$/.test(extId)) {
-      sendResponse({
-        ok: false,
-        error: 'Extension id unavailable. Reload the extension and try again.',
-      });
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!isSameExtension(sender)) return false;
+
+  if (message?.type === 'YT_STUDYFLOW_API_REQUEST') {
+    const url = String(message.url ?? '');
+
+    if (!isBackendUrl(url)) {
+      sendResponse({ ok: false, status: 0, text: '', error: 'Blocked URL' });
       return true;
     }
 
-    const authWebBase = String(message.authWebUrl ?? 'http://localhost:5174').replace(/\/$/, '');
-    const url = `${authWebBase}/sign-in?ext_id=${encodeURIComponent(extId)}&redirect=extension`;
-
-    chrome.windows.create(
-      { url, type: 'popup', width: 480, height: 720, focused: true },
-      (win) => {
-        if (chrome.runtime.lastError || !win?.id) {
-          chrome.tabs.create({ url }, (tab) => {
-            if (chrome.runtime.lastError || !tab?.id) {
-              sendResponse({
-                ok: false,
-                error: 'Could not open the sign-in window. Allow popups for this extension.',
-              });
-              return;
-            }
-            sendResponse({ ok: true });
-          });
-          return;
-        }
-        sendResponse({ ok: true });
-      }
-    );
-    return true;
-  }
-  if (message?.type === 'YT_STUDYFLOW_API_REQUEST') {
-    const url = String(message.url ?? '');
     const method = String(message.method ?? 'GET');
     const headers = (message.headers ?? {}) as Record<string, string>;
     const body = message.body as string | undefined;
@@ -102,13 +71,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     return true;
   }
-  if (message?.type === 'YT_STUDYFLOW_PING_AUTH_WEB') {
-    const url = String(message.url ?? 'http://localhost:5174').replace(/\/$/, '');
-    void fetch(`${url}/`, { method: 'GET' })
-      .then((resp) => sendResponse({ ok: resp.ok }))
-      .catch(() => sendResponse({ ok: false }));
-    return true;
-  }
+
   return false;
 });
 
@@ -178,17 +141,32 @@ function enableCaptionsInMainWorld(): boolean {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!isSameExtension(sender)) return false;
+
   const tabId = sender.tab?.id;
   if (!tabId) return false;
 
   if (message?.type === 'YT_STUDYFLOW_PAGE_FETCH') {
+    const url = String(message.url ?? '');
+
+    if (!isPageFetchUrl(url)) {
+      sendResponse({
+        ok: false,
+        status: 0,
+        text: '',
+        contentType: '',
+        error: 'Blocked URL',
+      });
+      return true;
+    }
+
     chrome.scripting
       .executeScript({
         target: { tabId },
         world: 'MAIN',
         func: pageFetchInMainWorld,
         args: [
-          String(message.url ?? ''),
+          url,
           String(message.method ?? 'GET'),
           message.body ? String(message.body) : null,
           (message.headers ?? {}) as Record<string, string>,

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { verifyAuthToken } from '../lib/authUtils.js';
-import { GUEST_USER_ID } from '../config/auth.config.js';
+import { ANON_IP_PREFIX, ANON_USER_PREFIX, GUEST_USER_ID } from '../config/auth.config.js';
 import { env } from '../config/env.js';
 
 export type AuthedRequest = Request & {
@@ -9,6 +10,29 @@ export type AuthedRequest = Request & {
   userName?: string;
   userImageUrl?: string;
 };
+
+export const INSTALL_ID_HEADER = 'x-install-id';
+
+const installIdSchema = z.string().trim().uuid();
+
+/**
+ * Identity for unauthenticated callers.
+ *
+ * Each extension install sends a random UUID in X-Install-Id, so quotas, rate limits
+ * and stored data are scoped per installation. Callers without a usable install id
+ * fall back to their IP — never to a single shared guest user.
+ */
+export function anonymousUserId(req: Request): string {
+  const raw = req.headers[INSTALL_ID_HEADER];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const parsed = installIdSchema.safeParse(value ?? '');
+
+  if (parsed.success) {
+    return `${ANON_USER_PREFIX}${parsed.data.toLowerCase()}`;
+  }
+
+  return `${ANON_IP_PREFIX}${req.ip ?? 'unknown'}`;
+}
 
 export const clerkAuthMiddleware = (_req: Request, _res: Response, next: NextFunction) => next();
 
@@ -43,10 +67,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
   }
 
-  // 3. Fallback for guest mode if no auth token is passed
+  // 3. Anonymous mode: identify per installation (or per IP), never one shared user.
   const authed = req as AuthedRequest;
-  authed.userId = GUEST_USER_ID;
-  authed.userEmail = 'guest@local.dev';
+  authed.userId = anonymousUserId(req);
   authed.userName = 'Guest';
   next();
 }

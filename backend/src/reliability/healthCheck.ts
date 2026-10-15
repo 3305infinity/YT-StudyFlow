@@ -10,7 +10,10 @@ export type HealthCheckResult = {
   overall: HealthStatus;
   services: {
     pinecone: ServiceHealth;
+    /** Embeddings provider. */
     gemini: ServiceHealth;
+    /** Text generation provider. */
+    groq: ServiceHealth;
     cache: ServiceHealth;
   };
 };
@@ -18,12 +21,30 @@ export type HealthCheckResult = {
 export const HEALTH_CONFIG = {
   pineconeTimeoutMs: 5000,
   geminiTimeoutMs: 15000,
+  groqTimeoutMs: 15000,
   cacheMaxMemoryEntries: 1000,
 };
 
+type ProviderHealth = { checkHealth?: () => Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> };
+
+async function probe(provider: ProviderHealth): Promise<ServiceHealth> {
+  if (!provider.checkHealth) return { status: 'degraded', error: 'No health check available' };
+  const start = Date.now();
+  try {
+    return await provider.checkHealth();
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      error: error instanceof Error ? error.message : String(error),
+      latencyMs: Date.now() - start,
+    };
+  }
+}
+
 export function createHealthChecker(deps: {
   pineconeService: { isEnabled: () => boolean; checkHealth?: () => Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> };
-  geminiService: { checkHealth?: () => Promise<{ status: 'healthy' | 'unhealthy'; latencyMs?: number; error?: string }> };
+  geminiService: ProviderHealth;
+  groqService: ProviderHealth;
   cacheManager: { getStats: () => { sizes: { queryRewrite: number; embedding: number; retrieval: number; packing: number } } };
 }) {
   return {
@@ -31,6 +52,7 @@ export function createHealthChecker(deps: {
       const services: HealthCheckResult['services'] = {
         pinecone: { status: 'healthy' },
         gemini: { status: 'healthy' },
+        groq: { status: 'healthy' },
         cache: { status: 'healthy' },
       };
 
@@ -53,21 +75,10 @@ export function createHealthChecker(deps: {
         services.pinecone = { status: 'degraded', error: 'Disabled' };
       }
 
-      if (deps.geminiService.checkHealth) {
-        const start = Date.now();
-        try {
-          const health = await deps.geminiService.checkHealth();
-          services.gemini = health;
-        } catch (error) {
-          services.gemini = {
-            status: 'unhealthy',
-            error: error instanceof Error ? error.message : String(error),
-            latencyMs: Date.now() - start,
-          };
-        }
-      } else {
-        services.gemini = { status: 'degraded', error: 'No health check available' };
-      }
+      [services.gemini, services.groq] = await Promise.all([
+        probe(deps.geminiService),
+        probe(deps.groqService),
+      ]);
 
       try {
         const stats = deps.cacheManager.getStats();
