@@ -41,9 +41,14 @@ export function createApp() {
     });
   });
 
+  // Unguarded on purpose: Render's health check must never be rate-limited.
   app.use('/health', healthRoutes);
-  app.use('/api/auth', authRoutes);
-  app.use('/api/personal-notes', personalNotesRouter);
+
+  // Auth routes manage their own requireAuth (signup/login are public by design),
+  // so only the per-IP limiter applies — enough to stop credential-stuffing bursts.
+  app.use('/api/auth', ipRateLimiter, authRoutes);
+
+  app.use('/api/personal-notes', ...apiGuards, personalNotesRouter);
 
   app.use(clerkAuthMiddleware);
   app.use('/api/ai', ...apiGuards, aiRoutes);

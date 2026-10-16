@@ -97,12 +97,16 @@ Tick all three. They are all true for this extension:
 Required, because data collection boxes are ticked.
 
 ```
-https://example.com/yt-studyflow/privacy
+https://github.com/3305infinity/YT-StudyFlow/blob/main/store/PRIVACY_POLICY.md
 ```
 
-> **Before publishing:** host `store/PRIVACY_POLICY.md` (rendered, e.g. on GitHub Pages
-> or your own site) at a public, non-expiring URL and paste it here. The policy must be
-> reachable without a login.
+This serves `store/PRIVACY_POLICY.md` straight from the public GitHub repo, so it needs
+no separate hosting. Two conditions must hold for as long as the extension is listed:
+
+- **the repository stays public** — if you make it private, this URL 404s for reviewers
+  and users, which breaks a Web Store requirement;
+- **the file stays at this path on the `main` branch** — if you move or rename it,
+  update the URL here and in the Web Store listing.
 
 ---
 
@@ -111,6 +115,41 @@ https://example.com/yt-studyflow/privacy
 > Does your extension require users to sign in?
 
 **Answer: No.** The extension is fully usable with no account.
+
+---
+
+## 8. Who processes the data, and how long it is kept
+
+Keep this consistent with the published privacy policy — reviewers do compare them.
+Every statement below matches what the code actually does.
+
+**Processors and their roles**
+
+| Party | Receives | Purpose |
+| --- | --- | --- |
+| **Google Gemini** | Transcript text only | Generates embeddings (`gemini-embedding-001`). Never receives user questions and never generates any text the user reads. |
+| **Groq** | Transcript excerpts + the user's question | Generates all text output: chat answers, translations, notes, summaries, chapters, flashcards and quizzes. |
+| **Pinecone** | Embeddings + metadata (transcript passage text, timestamps, video ID/title) | Vector storage and retrieval, in a namespace keyed by the anonymous install ID and video ID. |
+| **Render** | Hosts the backend; sees request metadata | Infrastructure only. |
+
+No data is sold, shared with data brokers, used for advertising or ad targeting, or
+used to train any model.
+
+**Retention**
+
+- **In the browser** (IndexedDB + chrome.storage): notes, flashcards, quizzes, chat
+  history, cached transcripts and the anonymous install ID. Kept **until the user
+  deletes it**; nothing expires automatically.
+- **Pinecone**: kept **indefinitely until deleted** — there is no automatic expiry and
+  no scheduled purge job. Deleted when the user clears a video's data, calls
+  `DELETE /api/rag/video/<videoId>`, or emails us their install ID.
+- **Server-side caches**: in memory only, 15-60 minutes, lost on restart.
+- **Database**: optional and currently unused in this deployment (cloud sync is off).
+- **Server logs**: held by Render under their retention policy; transcript text and user
+  questions are not logged in production.
+
+**Deletion path:** the extension exposes the install ID under Settings → Privacy, and
+users can request deletion at nishthap1410@gmail.com.
 
 ---
 

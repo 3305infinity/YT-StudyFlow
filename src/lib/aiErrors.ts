@@ -72,11 +72,19 @@ export function friendlyAiError(err: unknown): string {
     }
 
     if (err.status === 401) return 'Session expired. Sign in again in Profile.';
-    if (err.status === 504) return 'Request timed out. Try again.';
+    if (err.status === 504) {
+      // The client already retried once, so a timeout here usually means the free-tier
+      // backend is still booting rather than that the request itself was too big.
+      return 'The StudyFlow server is still waking up. Give it a moment and try again.';
+    }
     if (err.status === 0) {
       return err.message.includes('background')
         ? 'Extension background worker unavailable. Reload the extension.'
-        : 'Cannot reach StudyFlow servers. Check your connection.';
+        : 'Cannot reach StudyFlow servers. The server may be waking up — retry in a moment, or check your connection.';
+    }
+    // 502/503 from a sleeping or restarting Render instance.
+    if (err.status === 502 || err.status === 503) {
+      return 'The StudyFlow server is starting up. Please try again in a few seconds.';
     }
     if (err.status >= 500) return err.message || 'Service temporarily unavailable. Try again in a moment.';
     return err.message || 'Something went wrong. Please try again.';

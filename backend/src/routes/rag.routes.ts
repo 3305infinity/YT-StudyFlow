@@ -45,3 +45,11 @@ ragRoutes.post('/retrieve', enforceDailyQuota, validateBody(retrieveSchema), (re
 ragRoutes.post('/embed', enforceDailyQuota, validateBody(embedSchema), (req, res, next) => {
   ragController.embed(req as AuthedRequest, res).catch(next);
 });
+
+/**
+ * Erases this installation's stored vectors for one video.
+ * No daily-quota check: deleting your own data should never be rate-limited away.
+ */
+ragRoutes.delete('/video/:videoId', (req, res, next) => {
+  ragController.deleteVideo(req as unknown as AuthedRequest, res).catch(next);
+});

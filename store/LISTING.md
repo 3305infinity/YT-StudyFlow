@@ -73,7 +73,7 @@ PRIVACY
 • We identify your installation with a random anonymous ID so fair-use limits are per person. It is not linked to you, your device or any account.
 • We never sell your data and never use it for advertising.
 
-Full privacy policy: https://example.com/yt-studyflow/privacy
+Full privacy policy: https://github.com/3305infinity/YT-StudyFlow/blob/main/store/PRIVACY_POLICY.md
 
 GETTING STARTED
 
@@ -83,12 +83,8 @@ GETTING STARTED
 
 It works best on videos with captions available — lectures, talks, tutorials and courses. Videos with captions disabled cannot be analysed.
 
-Questions or problems? Email support@example.com
+Questions or problems? Email nishthap1410@gmail.com
 ```
-
-> **Before publishing:** replace `https://example.com/yt-studyflow/privacy` and
-> `support@example.com` with your real URLs, and update `homepage_url` in
-> `public/manifest.json` to match.
 
 ---
 

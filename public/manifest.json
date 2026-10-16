@@ -4,7 +4,7 @@
   "version": "1.3.0",
   "description": "AI-powered learning layer for YouTube",
   "minimum_chrome_version": "111",
-  "homepage_url": "https://example.com/yt-studyflow",
+  "homepage_url": "https://github.com/3305infinity/YT-StudyFlow",
 
   "permissions": ["storage", "scripting"],
 

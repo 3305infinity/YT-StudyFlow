@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, LogOut, Sparkles, User, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, LogOut, Sparkles, User, Lock, Mail, Loader2, AlertCircle, Shield, Copy } from 'lucide-react';
 import { useSettingsStore } from '@/store/settings.store';
 import { useAuthStore } from '@/store/auth.store';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { AUTH_DISABLED } from '@lib/config/auth.config';
+import { getInstallId } from '@lib/api/installId';
 
 export function SettingsPanel() {
   const { chatMode, defaultNoteType, theme, loaded, load, update } = useSettingsStore();
@@ -25,11 +26,25 @@ export function SettingsPanel() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [installId, setInstallId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void load();
     void loadAuth();
+    void getInstallId().then(setInstallId);
   }, [load, loadAuth]);
+
+  const copyInstallId = async () => {
+    if (!installId) return;
+    try {
+      await navigator.clipboard.writeText(installId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard can be blocked; the id is selectable on screen either way.
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,6 +322,39 @@ export function SettingsPanel() {
             </label>
           </>
         )}
+      </section>
+
+      {/* ---------- Privacy Section ---------- */}
+      <section className="rounded-2xl border border-line bg-surface p-4 space-y-3 shadow-1">
+        <div className="flex items-center gap-2">
+          <Shield className="h-4 w-4 text-brand" />
+          <h3 className="text-sm font-semibold text-content">Privacy</h3>
+        </div>
+
+        <p className="text-xs text-content-muted">
+          Your notes, flashcards and history stay in this browser. This anonymous ID is
+          the only thing that identifies your installation to the StudyFlow server — it
+          is random, created on this device, and not linked to you or any account.
+        </p>
+
+        <div className="flex items-center gap-2">
+          <code className="flex-1 truncate rounded-xl border border-line bg-surface-raised px-3 py-2 font-mono text-[11px] text-content">
+            {installId ?? 'Generating…'}
+          </code>
+          <button
+            type="button"
+            onClick={copyInstallId}
+            disabled={!installId}
+            className="shrink-0 rounded-xl border border-line bg-surface-raised px-3 py-2 text-xs text-content transition hover:border-brand disabled:opacity-50"
+            title="Copy install ID"
+          >
+            {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-brand" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+
+        <p className="text-xs text-content-muted">
+          To have the data stored for this installation deleted, email us this ID.
+        </p>
       </section>
     </div>
   );

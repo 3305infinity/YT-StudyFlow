@@ -1,12 +1,11 @@
 # YT StudyFlow — Privacy Policy
 
-**Last updated: 15 October 2026**
+**Last updated: 16 October 2026**
 
 YT StudyFlow is a Chrome extension that helps you study the YouTube video you are
 watching. This page explains, in plain language, exactly what data moves where.
 
-If anything here is unclear, email us at **privacy@example.com** (replace with your
-real support address before publishing).
+If anything here is unclear, email us at **nishthap1410@gmail.com**.
 
 ---
 
@@ -94,7 +93,7 @@ clearing the extension's data from Chrome's site/extension settings.
 The first time the extension runs, it generates a **random UUID** (for example
 `3f2a9c10-7b1d-4e55-9a02-61e0cbb4f8d1`) and saves it under `studyflow_install_id` in
 `chrome.storage.local`. It is sent with every request to our backend in the
-`X-Install-Id` header.
+`X-Install-Id` header. You can see it any time under **Settings → Privacy**.
 
 - It is generated locally by your browser from random data.
 - It is **not** derived from your device, hardware, account, email or IP address.
@@ -121,14 +120,30 @@ If no valid install ID is sent, our backend falls back to rate-limiting by IP ad
 
 ## How long we keep things
 
-| Where | Retention |
-| --- | --- |
-| **On your computer** (IndexedDB, chrome.storage) | Until you delete it or uninstall the extension. We never expire it for you. |
-| **Transcripts and questions in transit** | Held in memory only for as long as it takes to produce your answer. We do not write them to a request log. |
-| **Pinecone embeddings** | Kept so repeat questions about the same video are fast. Cleared when you clear the video's data in the extension, and purged for inactive namespaces at least every 90 days. |
-| **Rate-limit counters** | In memory, reset on a rolling window of a few minutes. |
-| **Server error logs** | Up to 30 days, retained by our hosting provider (Render) for debugging. These contain timestamps, status codes and IP addresses, not transcript content. |
-| **Third-party AI providers** | Per their own retention policies, linked above. |
+We are deliberately specific here, because we would rather state a plain fact than a
+reassuring number we do not actually enforce.
+
+| Where | What is kept | How long |
+| --- | --- | --- |
+| **Your browser** — IndexedDB and chrome.storage | Notes, flashcards and their review schedule, quizzes, chat history, cached transcripts, chapters, playlists, local progress counters, your settings, and the anonymous install ID | **Until you delete it.** Nothing expires on its own. Removing the extension or clearing its data removes all of it. |
+| **Pinecone** — vector database | Embeddings plus, as metadata, the transcript passage text (first 1000 characters per passage), its start/end timestamps, the video ID and video title. Stored in a namespace named after your anonymous install ID and the video ID. | **Kept indefinitely until deleted.** There is no automatic expiry and no scheduled purge job. It is deleted when you clear a video's data in the extension, when you call the deletion endpoint below, or when you email us. |
+| **Transcripts and questions in transit** | Nothing | Held in memory only for the duration of the request. They are not written to a request log. |
+| **Server-side caches** | Query rewrites, embeddings, retrieval results and packed context, capped at 1000 entries each | **Minutes.** 15 minutes for query rewrites, retrieval results and packed context; 60 minutes for embeddings. All of it is in memory only and is lost whenever the server restarts or redeploys. |
+| **Rate-limit counters** | Your install ID and IP address | In memory, on a rolling window of about a minute. Lost on restart. |
+| **Database (PostgreSQL)** | Only used if the optional `DATABASE_URL` is configured. When enabled it stores a usage log (install ID, action name, timestamp) and any personal notes you sync. | **Until deleted.** This deployment currently runs with cloud sync off, so in practice nothing is written here. |
+| **Server logs** | Timestamps, HTTP status codes, IP addresses and error messages. Transcript text and your questions are **not** logged in production. | Held by our hosting provider, Render, under their own log-retention policy. We do not control that window and so do not quote one. |
+| **Third-party AI providers** | Per their own retention policies, linked above. | Set by Google, Groq and Pinecone, not by us. |
+
+### Deleting your data
+
+- **Everything on your computer:** remove the extension, or clear its data from Chrome's
+  extension settings. This is immediate and needs nothing from us.
+- **Your stored vectors for one video:** the extension can erase them, which calls
+  `DELETE /api/rag/video/<videoId>` on our backend. That endpoint deletes only the
+  namespace belonging to your own install ID, so it can never touch anyone else's data.
+- **Everything we hold for your installation:** email **nishthap1410@gmail.com** with your
+  install ID and we will delete it. You can find your install ID in the extension's
+  settings. We do not need, and will not ask for, any other identifying information.
 
 ---
 
@@ -176,9 +191,7 @@ noted in the Chrome Web Store listing.
 
 ## Contact
 
-Questions, concerns or deletion requests: **privacy@example.com**
+Questions, concerns or deletion requests: **nishthap1410@gmail.com**
 
-> **Before publishing:** replace `privacy@example.com` with a real monitored address,
-> host this file at a public URL, and paste that URL into the Chrome Web Store listing's
-> "Privacy policy URL" field. Also confirm the Pinecone and log retention figures match
-> what you actually operate.
+For a deletion request, include the anonymous install ID shown in the extension's
+Settings → Privacy section. That is all we need, and all we can act on.
