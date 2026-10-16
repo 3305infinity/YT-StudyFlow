@@ -12,5 +12,14 @@
     "declaration": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    // Tests and dev-only scripts are never deployed. They pull in node:test and other
+    // dev-only types, so compiling them would make a production build depend on
+    // devDependencies. Run them with tsx instead: `npx tsx src/services/run-tests.ts`.
+    "src/**/*.test.ts",
+    "src/services/run-tests.ts",
+    "src/services/execute-integration.ts"
+  ]
 }

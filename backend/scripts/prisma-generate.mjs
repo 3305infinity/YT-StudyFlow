@@ -14,8 +14,44 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PLACEHOLDER = 'postgresql://placeholder:placeholder@localhost:5432/placeholder';
+
+const BACKEND_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ENGINE_DIR = path.join(BACKEND_ROOT, 'node_modules', '.prisma', 'client');
+
+/**
+ * Removes half-written engine files left behind by an interrupted generate.
+ *
+ * Prisma writes the query engine to `query_engine-*.tmp<pid>` and then renames it over
+ * the real file. On Windows that rename intermittently fails with EPERM (an antivirus
+ * or indexer holding the fresh file open for a moment). Every failure leaves its .tmp
+ * behind, and once a few have piled up the next generate keeps failing, which makes
+ * plain `npm install` exit 1. They are pure garbage, so clear them first.
+ */
+function removeStaleEngineTempFiles() {
+  if (!existsSync(ENGINE_DIR)) return;
+
+  let removed = 0;
+  for (const name of readdirSync(ENGINE_DIR)) {
+    if (!/\.tmp\d+$/.test(name)) continue;
+    try {
+      rmSync(path.join(ENGINE_DIR, name), { force: true });
+      removed++;
+    } catch {
+      // Still locked — leave it; prisma may well succeed anyway.
+    }
+  }
+
+  if (removed > 0) {
+    console.log(`[prisma] Cleared ${removed} stale engine temp file(s) before generating.`);
+  }
+}
+
+removeStaleEngineTempFiles();
 
 const usingPlaceholder = !process.env.DATABASE_URL?.trim();
 if (usingPlaceholder) {

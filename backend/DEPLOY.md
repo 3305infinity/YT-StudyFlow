@@ -15,14 +15,26 @@ Create a **Web Service** from this repository, then set:
 | --- | --- |
 | **Environment** | Node |
 | **Root Directory** | `backend` |
-| **Build Command** | `npm install && npm run build` |
+| **Build Command** | `npm install --include=dev && npm run build` |
 | **Start Command** | `npm start` |
 | **Node version** | 20 (pinned by `backend/.node-version`; `engines.node` requires >= 20) |
 | **Health Check Path** | `/health` |
 | **Instance type** | Free works; see the cold-start section before choosing |
 
-Root Directory **must** be `backend` — the repository root is the Chrome extension, and
-building from there will not produce a server.
+Two settings here are easy to get wrong, and both fail the build:
+
+**Root Directory must be `backend`.** The repository root is the Chrome extension;
+building from there runs `vite build` and never produces a server. Symptom: the build
+fails in seconds and the log mentions the extension or a missing `dist/index.js`.
+
+**The build command needs `--include=dev`.** `NODE_ENV` is set to `production` (it has
+to be, for the app itself), and npm honours that by skipping `devDependencies` — which
+is where `typescript`, `@types/node`, `@types/express`, `@types/cors` and the `prisma`
+CLI live. Without the flag, `tsc` fails with a few hundred `TS7006 / TS7016 / TS2580`
+errors like *"Could not find a declaration file for module 'express'"*.
+
+This is only about the build step; `NODE_ENV=production` still applies at runtime, which
+is what matters for the app's own behaviour.
 
 ### What the build does
 
@@ -186,7 +198,9 @@ Allow a minute for the first request if the instance was asleep.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Build fails with `P1012 Environment variable not found: DIRECT_URL` | `scripts/prisma-generate.mjs` was bypassed — someone changed the build command back to a bare `prisma generate` | Restore the build command to `npm install && npm run build` |
+| Build fails with `P1012 Environment variable not found: DIRECT_URL` | `scripts/prisma-generate.mjs` was bypassed — someone changed the build command back to a bare `prisma generate` | Restore the build command to `npm install --include=dev && npm run build` |
+| Build fails with hundreds of `TS7006` / `TS7016` / `TS2580` errors ("Could not find a declaration file for module 'express'", "Cannot find name 'process'") | `--include=dev` missing from the build command, so `NODE_ENV=production` made npm skip the `@types/*` packages | Set Build Command to `npm install --include=dev && npm run build` |
+| Build fails in ~15s, log mentions `vite` or the extension | Root Directory is blank instead of `backend` | Set Root Directory to `backend` |
 | Boot fails: `GROQ_API_KEY is required in production` | Key missing | Set `GROQ_API_KEY` and redeploy |
 | Boot fails: `GEMINI_API_KEY is required in production for embeddings` | Key missing | Set `GEMINI_API_KEY` and redeploy |
 | Extension shows "server is waking up" on every request | Free-tier suspension | See section 5 |
