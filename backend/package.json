@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "//buildTimeDeps": "typescript, prisma and the @types/* packages are build-time tools, but they live in dependencies on purpose. Render sets NODE_ENV=production, which makes npm skip devDependencies — tsc then has no type definitions and prisma generate has no CLI, and the build fails with hundreds of TS7006/TS7016/TS2580 errors. Keeping them in dependencies makes the build work with ANY build command, including a plain `npm install`. Do not move them back.",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -26,14 +27,14 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.0.0",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
+    "zod": "^3.24.2",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.12.12",
     "prisma": "^6.19.3",
-    "tsx": "^4.19.3",
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3"
   }
 }
